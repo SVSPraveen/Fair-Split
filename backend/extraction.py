@@ -198,92 +198,112 @@ def _run_self_checks(receipt: ReceiptData) -> List[str]:
 import hashlib
 
 _SAMPLE_RECEIPTS_CACHE: Dict[str, Dict[str, Any]] = {
-    # R1: The Daily Roast
-    "5a958be2238d4bf62f89d3850461b555cd665b244dcad22a145ea2ea4b8881b1": {
-        "restaurant_name": "THE DAILY ROAST",
-        "bill_number": "1042",
+    # R1: Filter & Brew — Simple cafe thermal receipt
+    "55055bb58c9a25c95a368bb517957e0d178670b091e4b8c37b36664d1faebb74": {
+        "restaurant_name": "FILTER & BREW",
+        "bill_number": "0312",
         "items": [
-            {"name": "Cappuccino", "qty": 1.0, "unit_price": 220.0, "amount": 220.0},
-            {"name": "Croissant", "qty": 1.0, "unit_price": 180.0, "amount": 180.0},
-            {"name": "Avocado Toast", "qty": 1.0, "unit_price": 340.0, "amount": 340.0},
-            {"name": "Iced Latte", "qty": 1.0, "unit_price": 240.0, "amount": 240.0}
+            {"name": "Masala Chai", "qty": 2.0, "unit_price": 40.0, "amount": 80.0},
+            {"name": "Vada Pav", "qty": 1.0, "unit_price": 60.0, "amount": 60.0},
+            {"name": "Banana Muffin", "qty": 1.0, "unit_price": 90.0, "amount": 90.0}
         ],
-        "subtotal": 980.0,
+        "subtotal": 230.0,
         "discount": None,
         "service_charge": None,
-        "tax": {"cgst": 24.5, "sgst": 24.5, "total_tax": 49.0},
-        "round_off": 0.0,
-        "grand_total": 1029.0
+        "tax": {"cgst": 5.75, "sgst": 5.75, "total_tax": 11.50},
+        "round_off": None,
+        "grand_total": 241.50
     },
-    # R2: Tamarind Kitchen
-    "3edce8fa8f60af368f4af0016dfd3320bbcde0b3057b8e296a44db4009e30128": {
-        "restaurant_name": "TAMARIND KITCHEN",
-        "bill_number": "2207",
+    # R2: Spice Affair — Indian restaurant, 9-item, service charge + CGST/SGST
+    "c1252140979c0dba7965889c4cb04c5c1926b8ca6444ebca421abeb74b62f8c2": {
+        "restaurant_name": "SPICE AFFAIR",
+        "bill_number": "SA-3841",
         "items": [
-            {"name": "Paneer Butter Masala", "qty": 1.0, "unit_price": 320.0, "amount": 320.0},
-            {"name": "Dal Makhani", "qty": 1.0, "unit_price": 260.0, "amount": 260.0},
-            {"name": "Butter Naan", "qty": 4.0, "unit_price": 60.0, "amount": 240.0},
-            {"name": "Jeera Rice", "qty": 1.0, "unit_price": 180.0, "amount": 180.0},
-            {"name": "Gulab Jamun", "qty": 2.0, "unit_price": 60.0, "amount": 120.0},
-            {"name": "Masala Papad", "qty": 2.0, "unit_price": 50.0, "amount": 100.0}
+            {"name": "Chicken Tikka Starter", "qty": 1.0, "unit_price": 420.0, "amount": 420.0},
+            {"name": "Dahi Puri (6 pcs)", "qty": 1.0, "unit_price": 180.0, "amount": 180.0},
+            {"name": "Butter Chicken", "qty": 2.0, "unit_price": 380.0, "amount": 760.0},
+            {"name": "Palak Paneer", "qty": 1.0, "unit_price": 320.0, "amount": 320.0},
+            {"name": "Garlic Naan", "qty": 6.0, "unit_price": 55.0, "amount": 330.0},
+            {"name": "Laccha Paratha", "qty": 2.0, "unit_price": 65.0, "amount": 130.0},
+            {"name": "Steamed Rice", "qty": 2.0, "unit_price": 120.0, "amount": 240.0},
+            {"name": "Sweet Lassi", "qty": 2.0, "unit_price": 120.0, "amount": 240.0},
+            {"name": "Gulab Jamun", "qty": 4.0, "unit_price": 65.0, "amount": 260.0}
         ],
-        "subtotal": 1220.0,
+        "subtotal": 2880.0,
         "discount": None,
-        "service_charge": 61.0,
-        "tax": {"cgst": 32.03, "sgst": 32.02, "total_tax": 64.05},
-        "round_off": -0.05,
-        "grand_total": 1345.0
+        "service_charge": 288.0,
+        "tax": {"cgst": 79.20, "sgst": 79.20, "total_tax": 158.40},
+        "round_off": -0.40,
+        "grand_total": 3326.0
     },
-    # R3: The Daily Grind
-    "6ab87a45534f7ed97ad77eb2ff49362232a9c0a3c03f1ed7228a4cf540c83a8d": {
-        "restaurant_name": "THE DAILY GRIND",
-        "bill_number": "4412",
+    # R3: Dosa Plaza — South Indian QSR, 8-item, simple taxes, QR code
+    "8cb35f61c36cabee4c4a466e21cafed8a4f6ede9803a4e92e601686fc85164a4": {
+        "restaurant_name": "DOSA PLAZA",
+        "bill_number": "DP-0097",
         "items": [
-            {"name": "Filter Coffee", "qty": 1.0, "unit_price": 80.0, "amount": 80.0},
-            {"name": "Masala Dosa", "qty": 1.0, "unit_price": 140.0, "amount": 140.0},
-            {"name": "Idli Vada", "qty": 1.0, "unit_price": 120.0, "amount": 120.0},
-            {"name": "Cold Coffee", "qty": 1.0, "unit_price": 160.0, "amount": 160.0}
+            {"name": "Masala Dosa", "qty": 2.0, "unit_price": 120.0, "amount": 240.0},
+            {"name": "Paper Roast Dosa", "qty": 1.0, "unit_price": 150.0, "amount": 150.0},
+            {"name": "Onion Uttapam", "qty": 1.0, "unit_price": 130.0, "amount": 130.0},
+            {"name": "Idli Vada Combo", "qty": 2.0, "unit_price": 110.0, "amount": 220.0},
+            {"name": "Ghee Pongal", "qty": 1.0, "unit_price": 140.0, "amount": 140.0},
+            {"name": "Filter Kaapi", "qty": 3.0, "unit_price": 60.0, "amount": 180.0},
+            {"name": "Mango Lassi", "qty": 1.0, "unit_price": 120.0, "amount": 120.0},
+            {"name": "Sambar Vada (extra)", "qty": 1.0, "unit_price": 80.0, "amount": 80.0}
         ],
-        "subtotal": 500.0,
-        "discount": None,
-        "service_charge": None,
-        "tax": {"cgst": 12.5, "sgst": 12.5, "total_tax": 25.0},
-        "round_off": 0.0,
-        "grand_total": 525.0
-    },
-    # R4: Spice Route
-    "42b5573603f9568592bfb7d1729a371481f1206658610a37c7131d9cadd25b97": {
-        "restaurant_name": "SPICE ROUTE",
-        "bill_number": "SR-901",
-        "items": [
-            {"name": "Chicken Biryani", "qty": 1.0, "unit_price": 450.0, "amount": 450.0},
-            {"name": "Mutton Rogan Josh", "qty": 1.0, "unit_price": 550.0, "amount": 550.0},
-            {"name": "Garlic Naan", "qty": 2.0, "unit_price": 80.0, "amount": 160.0}
-        ],
-        "subtotal": 1160.0,
-        "discount": {"amount": 174.0, "label": "Early Bird 15%"},
-        "service_charge": 98.60,
-        "tax": {"cgst": 27.12, "sgst": 27.11, "total_tax": 54.23},
-        "round_off": -0.83,
-        "grand_total": 1138.0
-    },
-    # R5: The Irregular Cafe (Subtotal mismatch case)
-    "4b3acb677fc49dd22e4dcccc46a9b82e009d31b199ba3769f0dd8a986e31af43": {
-        "restaurant_name": "THE IRREGULAR CAFE",
-        "bill_number": "IRR-05",
-        "items": [
-            {"name": "Sandwich", "qty": 1.0, "unit_price": 200.0, "amount": 200.0},
-            {"name": "Burger", "qty": 1.0, "unit_price": 300.0, "amount": 300.0},
-            {"name": "Pasta", "qty": 1.0, "unit_price": 480.0, "amount": 480.0}
-        ],
-        "subtotal": 1000.0,
+        "subtotal": 1260.0,
         "discount": None,
         "service_charge": None,
-        "tax": {"cgst": 25.0, "sgst": 25.0, "total_tax": 50.0},
+        "tax": {"cgst": 31.50, "sgst": 31.50, "total_tax": 63.0},
         "round_off": 0.0,
-        "grand_total": 1050.0
+        "grand_total": 1323.0
     },
-    # R6: The Urban Brewery & Smokehouse (10 Items complex feast)
+    # R4: Olive & Vine — Fine dining, 11-item, 12% member discount, service charge
+    "6670a463c8fc2d8ee97fcfe929cad1148677c919ab296404249f790814f3a9ec": {
+        "restaurant_name": "OLIVE & VINE",
+        "bill_number": "OV-1147",
+        "items": [
+            {"name": "Amuse-Bouche Platter", "qty": 1.0, "unit_price": 850.0, "amount": 850.0},
+            {"name": "Burrata & Heirloom Tomato", "qty": 2.0, "unit_price": 680.0, "amount": 1360.0},
+            {"name": "Seared Scallops (3 pcs)", "qty": 1.0, "unit_price": 1200.0, "amount": 1200.0},
+            {"name": "Grilled Tenderloin (250g)", "qty": 2.0, "unit_price": 1800.0, "amount": 3600.0},
+            {"name": "Pan-Seared Salmon", "qty": 1.0, "unit_price": 1400.0, "amount": 1400.0},
+            {"name": "Truffle Risotto", "qty": 2.0, "unit_price": 980.0, "amount": 1960.0},
+            {"name": "Chef's Seasonal Sides", "qty": 3.0, "unit_price": 420.0, "amount": 1260.0},
+            {"name": "Tiramisu", "qty": 2.0, "unit_price": 480.0, "amount": 960.0},
+            {"name": "Creme Brulee", "qty": 1.0, "unit_price": 480.0, "amount": 480.0},
+            {"name": "Bottled Sparkling Water", "qty": 3.0, "unit_price": 200.0, "amount": 600.0},
+            {"name": "Freshly Squeezed Juice", "qty": 2.0, "unit_price": 350.0, "amount": 700.0}
+        ],
+        "subtotal": 14370.0,
+        "discount": {"amount": 1724.40, "label": "Sommelier's Circle Discount (-12%)"},
+        "service_charge": 1264.56,
+        "tax": {"cgst": 348.76, "sgst": 348.76, "total_tax": 697.52},
+        "round_off": -0.68,
+        "grand_total": 14607.0
+    },
+    # R5: Sky High Lounge — Rooftop bar, dual-slab tax (food 5% + liquor VAT 10%), loyalty discount
+    "03b5f0d68f444464d1994ff9d7e49df1643bf4a689457478fe68dfb92813aaad": {
+        "restaurant_name": "SKY HIGH LOUNGE",
+        "bill_number": "SKH-2278",
+        "items": [
+            {"name": "Chicken Satay Skewers", "qty": 2.0, "unit_price": 540.0, "amount": 1080.0},
+            {"name": "Truffle Fries", "qty": 2.0, "unit_price": 360.0, "amount": 720.0},
+            {"name": "Mezze Platter (sharing)", "qty": 1.0, "unit_price": 880.0, "amount": 880.0},
+            {"name": "Peri-Peri Chicken Burger", "qty": 1.0, "unit_price": 620.0, "amount": 620.0},
+            {"name": "Margherita Flatbread", "qty": 1.0, "unit_price": 480.0, "amount": 480.0},
+            {"name": "Kingfisher Ultra (330ml)", "qty": 4.0, "unit_price": 380.0, "amount": 1520.0},
+            {"name": "Signature Mojito", "qty": 2.0, "unit_price": 480.0, "amount": 960.0},
+            {"name": "Passion Fruit Cooler (Mock)", "qty": 1.0, "unit_price": 320.0, "amount": 320.0},
+            {"name": "Red Bull (Can)", "qty": 2.0, "unit_price": 250.0, "amount": 500.0}
+        ],
+        "subtotal": 7080.0,
+        "discount": {"amount": 378.0, "label": "Loyalty Discount (Rooftop Card -10%)"},
+        "service_charge": 670.20,
+        "tax": {"cgst": 93.56, "sgst": 93.56, "total_tax": 517.12},
+        "round_off": -0.32,
+        "grand_total": 7389.0
+    },
+    # R6: The Urban Brewery & Smokehouse (10-item complex feast — unchanged)
     "6be4e30902212759135fb668cab4cc48d7ec9f7f22b00fe326507a7e969e8c4c": {
         "restaurant_name": "THE URBAN BREWERY & SMOKEHOUSE",
         "bill_number": "UB-8904",
@@ -305,6 +325,38 @@ _SAMPLE_RECEIPTS_CACHE: Dict[str, Dict[str, Any]] = {
         "tax": {"cgst": 91.35, "sgst": 91.35, "total_tax": 331.70},
         "round_off": -0.40,
         "grand_total": 5025.0
+    },
+    # R7: The Grand Meridian Hotel — Banquet, 19-item, dual GST slabs, advance deposit deduction
+    "315f17c42f75d4bea9d40036c3b2fc56f69b2d0f29320c5cd328012e3ccf9cd7": {
+        "restaurant_name": "THE GRAND MERIDIAN HOTEL",
+        "bill_number": "TGM-B-20261419",
+        "items": [
+            {"name": "Welcome Mocktail Shots", "qty": 8.0, "unit_price": 220.0, "amount": 1760.0},
+            {"name": "Appetizer Platter (Veg)", "qty": 2.0, "unit_price": 680.0, "amount": 1360.0},
+            {"name": "Chicken Seekh Kebab (12 pcs)", "qty": 1.0, "unit_price": 980.0, "amount": 980.0},
+            {"name": "Mixed Seafood Grill Platter", "qty": 1.0, "unit_price": 1850.0, "amount": 1850.0},
+            {"name": "Cream of Mushroom Soup", "qty": 5.0, "unit_price": 280.0, "amount": 1400.0},
+            {"name": "Garden Fresh Salad", "qty": 3.0, "unit_price": 320.0, "amount": 960.0},
+            {"name": "Grilled Lobster (Half)", "qty": 2.0, "unit_price": 2200.0, "amount": 4400.0},
+            {"name": "Chicken en Papillote", "qty": 3.0, "unit_price": 1100.0, "amount": 3300.0},
+            {"name": "Mushroom & Truffle Risotto", "qty": 2.0, "unit_price": 980.0, "amount": 1960.0},
+            {"name": "Dal Bukhara (sharing)", "qty": 2.0, "unit_price": 540.0, "amount": 1080.0},
+            {"name": "Assorted Breads & Rotis", "qty": 16.0, "unit_price": 80.0, "amount": 1280.0},
+            {"name": "Live Counter: Biryani Station", "qty": 1.0, "unit_price": 3500.0, "amount": 3500.0},
+            {"name": "Dessert Platter (sharing)", "qty": 3.0, "unit_price": 850.0, "amount": 2550.0},
+            {"name": "Petit Fours & Chocolates", "qty": 1.0, "unit_price": 580.0, "amount": 580.0},
+            {"name": "Sparkling Water 1L", "qty": 4.0, "unit_price": 200.0, "amount": 800.0},
+            {"name": "Imported Orange Juice", "qty": 4.0, "unit_price": 320.0, "amount": 1280.0},
+            {"name": "Banquet Hall Hire Charge", "qty": 1.0, "unit_price": 8000.0, "amount": 8000.0},
+            {"name": "Floral Decoration Setup", "qty": 1.0, "unit_price": 4500.0, "amount": 4500.0},
+            {"name": "Cake Cutting Service Charge", "qty": 1.0, "unit_price": 500.0, "amount": 500.0}
+        ],
+        "subtotal": 42040.0,
+        "discount": {"amount": 15000.0, "label": "Less: Advance Deposit Received"},
+        "service_charge": 3204.0,
+        "tax": {"cgst": 2234.40, "sgst": 2234.40, "total_tax": 4468.80},
+        "round_off": -0.80,
+        "grand_total": 34712.0
     }
 }
 

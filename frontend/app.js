@@ -9,34 +9,46 @@ let lastSplitResponse = null;
 // Preset Scenarios Data
 const SAMPLE_PRESETS = {
   R1: {
-    description: "Three of us: Ravi, Neha, Sameer. Ravi had the cappuccino and sandwich, Neha had pasta and lime soda, Sameer had the brownie. Sameer paid.",
+    description: "Two of us: Kavya and Deepak. We each had one chai. Deepak had the Vada Pav, and Kavya had the Banana Muffin. Kavya paid.",
     imageFile: "samples/R1.png",
-    filename: "R1_cafe_receipt.png",
-    title: "R1: Brew & Bite Cafe"
+    filename: "R1_filter_brew_cafe.png",
+    title: "R1: Filter & Brew Cafe"
   },
   R2: {
-    description: "Four of us: Aman, Priya, Karan, Sara. The Gulab Jamun was shared just by Priya and Karan. Everything else was common to all four. Priya paid.",
+    description: "Four of us: Rohan, Divya, Arjun, Preethi. Rohan and Arjun shared the Butter Chicken (2 portions). Divya had the Palak Paneer alone. We all shared the Garlic Naan (6 pcs), Laccha Paratha, and Jeera Rice. The Dahi Puri starter was shared by Divya and Preethi. Gulab Jamun was shared equally across all four. Rohan paid.",
     imageFile: "samples/R2.png",
-    filename: "R2_tamarind_receipt.png",
-    title: "R2: Tamarind Kitchen"
+    filename: "R2_spice_affair_receipt.png",
+    title: "R2: Spice Affair"
   },
   R3: {
-    description: "Three of us: Ishaan, Meera, Rohit. We all shared the pizza, pasta, and garlic bread. Ishaan and Rohit shared the craft beer. Meera had the virgin mojito. Rohit paid.",
+    description: "Three of us: Sundar, Lakshmi, Aditya. Sundar had a Paper Roast Dosa alone. Lakshmi had the Onion Uttapam and one Idli Vada Combo. Aditya had Ghee Pongal and the other Idli Vada Combo. We all shared the 2 Masala Dosas, 3 Filter Kaapis, and Sambar Vada. Lakshmi had the Mango Lassi alone. Aditya paid.",
     imageFile: "samples/R3.png",
-    filename: "R3_italian_receipt.png",
-    title: "R3: The Daily Grind"
+    filename: "R3_dosa_plaza_receipt.png",
+    title: "R3: Dosa Plaza"
   },
   R4: {
-    description: "Four of us: Dev, Nikhil, Anjali, Farah. Dev and Nikhil shared the chicken biryani. Anjali had veg biryani, Farah had mutton rogan josh. We all had raita and soft drinks. Anjali paid.",
+    description: "Five of us: Natasha, Marcus, Elena, Rahul, Simone. Marcus and Elena shared the 2 Grilled Tenderloins. Rahul had the Pan-Seared Salmon alone. Natasha and Simone shared the Truffle Risotto. All five shared the Amuse-Bouche, Burrata, Seared Scallops, and 3 Seasonal Sides. Natasha and Elena shared the 2 Tiramisus. Rahul had the Crème Brûlée alone. Sparkling water shared across all five. Freshly squeezed juice for Natasha and Marcus. Natasha paid.",
     imageFile: "samples/R4.png",
-    filename: "R4_discount_receipt.png",
-    title: "R4: Spice Route"
+    filename: "R4_olive_vine_receipt.png",
+    title: "R4: Olive & Vine Fine Dining"
+  },
+  R5: {
+    description: "Five of us: Zara, Neel, Pooja, Farhan, Tina. Neel and Farhan had 2 Kingfisher Ultras each. Zara and Tina had the Signature Mojitos. Pooja had the Passion Fruit Cooler (non-alcoholic). Both Red Bulls were shared by Neel and Farhan. The Chicken Satay Skewers were shared between Zara, Pooja, and Tina. Truffle Fries shared by all five. Mezze Platter shared by Zara, Pooja, and Tina. Peri-Peri Burger was Farhan's. Margherita Flatbread shared by all five. Zara paid.",
+    imageFile: "samples/R5.png",
+    filename: "R5_sky_high_lounge_receipt.png",
+    title: "R5: Sky High Lounge Rooftop Bar"
   },
   R6: {
-    description: "Party of six: Vikram, Ananya, Kabir, Rhea, Siddharth, Tara. Vikram and Kabir shared the 3 pints of Craft IPA Beer. Ananya and Tara had the Mint Mojitos. Siddharth and Rhea shared the Smoked BBQ Pork Ribs and Crispy Calamari. All six of us shared the 2 Truffle Pizzas, Loaded Nachos, and Mineral Water. Ananya had the Caesar Salad. Rhea, Tara, and Vikram shared the 2 Chocolate Lava Cakes. Vikram paid the entire bill.",
+    description: "Party of six: Vikram, Ananya, Kabir, Rhea, Siddharth, Tara. Vikram and Kabir shared the 3 pints of Craft IPA Beer. Ananya and Tara had the Mint Mojitos. Siddharth and Rhea shared the Smoked BBQ Pork Ribs and Crispy Calamari. All six of us shared the 2 Truffle Pizzas, Loaded Nachos, and Mineral Water. Ananya had the Caesar Salad. Rhea, Tara, and Vikram shared the 2 Chocolate Lava Cakes. Eco packaging shared by all. Vikram paid the entire bill.",
     imageFile: "samples/R6.png",
     filename: "R6_urban_brewery_complex.png",
     title: "R6: Urban Brewery Feast (10 Items, Multi-Tax, Discount, 6-Person Group)"
+  },
+  R7: {
+    description: "Birthday party for Arjun, 8 guests: Arjun, Meena, Prashant, Kavitha, Suresh, Divyanka, Roshan, Teja. Welcome Mocktail Shots were one per person (8 total) equally shared. Appetizer Platter (Veg) shared between Kavitha, Meena, Divyanka. Chicken Seekh Kebab shared by Arjun, Prashant, Suresh, Roshan. Mixed Seafood Grill Platter was Prashant and Roshan only. Mushroom Soup shared by all 8. Garden Fresh Salad shared by Kavitha, Meena, Divyanka (3 bowls). Grilled Lobster (Half) — one for Arjun, one for Prashant. Chicken en Papillote — Arjun, Suresh, Roshan. Truffle Risotto — Kavitha and Divyanka. Dal Bukhara, Assorted Breads, Biryani Station, and Dessert Platters shared across all 8. Petit Fours shared by Arjun and Meena only. Sparkling Water and OJ shared equally across all 8. Banquet Hall and Floral Decoration costs split equally across all 8. Cake Cutting charged once to Arjun. The advance deposit of ₹15,000 was paid by Meena already. Arjun is paying the balance today.",
+    imageFile: "samples/R7.png",
+    filename: "R7_grand_meridian_banquet.png",
+    title: "R7: The Grand Meridian Hotel Banquet (19 Items, Dual-Slab GST, Advance Deposit, 8 Persons)"
   }
 };
 
