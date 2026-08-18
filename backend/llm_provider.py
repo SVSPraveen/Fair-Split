@@ -29,6 +29,24 @@ VISION_TIMEOUT_SECONDS: float = float(os.getenv("VISION_TIMEOUT_SECONDS", "15.0"
 TEXT_TIMEOUT_SECONDS: float = float(os.getenv("TEXT_TIMEOUT_SECONDS", "10.0"))
 
 
+def _optimize_image_for_ocr(image_bytes: bytes, max_dimension: int = 800) -> bytes:
+    """Resizes and compresses images to reduce token counts (~1000 tokens) and prevent TPM limits."""
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+        w, h = img.size
+        if max(w, h) > max_dimension:
+            scale = max_dimension / float(max(w, h))
+            new_size = (int(w * scale), int(h * scale))
+            img = img.resize(new_size, Image.Resampling.LANCZOS)
+        out = io.BytesIO()
+        img.save(out, format="JPEG", quality=85, optimize=True)
+        return out.getvalue()
+    except Exception:
+        return image_bytes
+
+
 class LLMProvider:
     """LLM Provider abstraction handling primary and fallback routing for vision and text."""
 
@@ -81,22 +99,27 @@ class LLMProvider:
         force_fallback: bool = False,
         timeout_seconds: float = VISION_TIMEOUT_SECONDS
     ) -> Tuple[str, bool, Optional[str]]:
-        """Executes a vision request using primary Gemini Flash, falling back to OpenRouter on 429 or timeout.
+        """Executes a vision request using primary Gemini Flash, falling back to Groq Vision or OpenRouter.
         Returns: (response_text, used_fallback_boolean, fallback_reason)
         """
+        # Optimize image to keep token usage small and prevent TPM rate limits
+        optimized_bytes = _optimize_image_for_ocr(image_bytes, max_dimension=800)
+
         used_fallback = False
         fallback_reason = None
 
+        # Try Primary Vision: Gemini 3.7 Flash
         if not force_fallback and self._gemini_client:
             try:
-                pil_image = Image.open(io.BytesIO(image_bytes))
-                config = types.GenerateContentConfig(
-                    http_options=types.HttpOptions(timeout=int(timeout_seconds * 1000))
-                )
+                img = Image.open(io.BytesIO(optimized_bytes))
                 response = self._gemini_client.models.generate_content(
                     model=GEMINI_VISION_PRIMARY,
-                    contents=[pil_image, prompt],
-                    config=config
+                    contents=[img, prompt],
+                    config=types.GenerateContentConfig(
+                        temperature=0.1,
+                        max_output_tokens=2048,
+                        http_options=types.HttpOptions(timeout=int(timeout_seconds * 1000))
+                    )
                 )
                 if response.text:
                     return response.text, False, None
@@ -117,24 +140,52 @@ class LLMProvider:
                 )
                 if is_timeout:
                     fallback_reason = "timeout"
-                    logger.warning(f"Gemini vision timed out after {int(timeout_seconds)}s, falling back to OpenRouter.")
+                    logger.warning(f"Gemini vision timed out after {int(timeout_seconds)}s, falling back.")
                 elif is_rate_limit:
                     fallback_reason = "rate_limit_429"
-                    logger.warning(f"Gemini vision returned 429, falling back to OpenRouter.")
+                    logger.warning(f"Gemini vision returned 429, falling back to Groq / OpenRouter.")
                 else:
                     fallback_reason = "error"
-                    logger.warning(f"Gemini vision call failed ({e}). Attempting OpenRouter fallback.")
+                    logger.warning(f"Gemini vision call failed ({e}). Attempting fallback.")
 
-        # Fallback to OpenRouter Free Vision
+        # Fallback Vision: Try Groq Vision first (qwen/qwen3.6-27b), then OpenRouter
         used_fallback = True
         if fallback_reason is None:
             fallback_reason = "forced_fallback" if force_fallback else "primary_unavailable"
 
-        if not self._openrouter_client:
-            raise ValueError("OpenRouter client not initialized. Cannot perform vision fallback.")
+        base64_image = base64.b64encode(optimized_bytes).decode("utf-8")
+        data_uri = f"data:image/jpeg;base64,{base64_image}"
 
-        base64_image = base64.b64encode(image_bytes).decode("utf-8")
-        data_uri = f"data:image/png;base64,{base64_image}"
+        # 1. Try Groq Vision (qwen/qwen3.6-27b)
+        if self._groq_client:
+            try:
+                resp = self._groq_client.chat.completions.create(
+                    model="qwen/qwen3.6-27b",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {"type": "image_url", "image_url": {"url": data_uri}}
+                            ]
+                        }
+                    ],
+                    temperature=0.1,
+                    max_tokens=2048,
+                    timeout=timeout_seconds
+                )
+                if resp.choices and resp.choices[0].message.content:
+                    return resp.choices[0].message.content, used_fallback, fallback_reason
+            except (httpx.TimeoutException, groq.APITimeoutError, TimeoutError) as groq_to_err:
+                logger.warning(f"Groq vision fallback timed out: {groq_to_err}")
+                if not self._openrouter_client:
+                    raise TimeoutError(f"Vision extraction timed out after {int(timeout_seconds)}s on Groq (qwen/qwen3.6-27b).") from groq_to_err
+            except Exception as groq_err:
+                logger.warning(f"Groq vision call failed ({groq_err}), falling back to OpenRouter.")
+
+        # 2. Try OpenRouter Vision
+        if not self._openrouter_client:
+            raise ValueError("No fallback vision client available (both Groq and OpenRouter unavailable).")
 
         try:
             resp = self._openrouter_client.chat.completions.create(
