@@ -1,8 +1,30 @@
 // Fair-Split Frontend Application Logic
-// Configurable API base URL (defaults to http://localhost:8000)
-const API_BASE_URL = window.API_BASE_URL || 'http://localhost:8000';
+// Configurable API base URL with LocalStorage persistence and in-UI settings panel
+const DEFAULT_API_URL = window.API_BASE_URL || 'http://localhost:8000';
+let API_BASE_URL = localStorage.getItem('fair_split_api_url') || DEFAULT_API_URL;
 
 let selectedBase64Image = null;
+let lastSplitResponse = null;
+
+// Preset Scenarios Data
+const SAMPLE_PRESETS = {
+  R1: {
+    description: "Three of us: Ravi, Neha, Sameer. Ravi had the cappuccino and sandwich, Neha had pasta and lime soda, Sameer had the brownie. Sameer paid.",
+    title: "R1: Brew & Bite Cafe (Individual Items)"
+  },
+  R2: {
+    description: "Four of us: Aman, Priya, Karan, Sara. The Gulab Jamun was shared just by Priya and Karan. Everything else was common to all four. Priya paid.",
+    title: "R2: Tamarind Kitchen (Shared Dishes, Priya Paid)"
+  },
+  R3: {
+    description: "Three of us: Ishaan, Meera, Rohit. We all shared the pizza, pasta, and garlic bread. Ishaan and Rohit shared the craft beer. Meera had the virgin mojito. Rohit paid.",
+    title: "R3: The Daily Grind (Shared Food & Drinks)"
+  },
+  R4: {
+    description: "Four of us: Dev, Nikhil, Anjali, Farah. Dev and Nikhil shared the chicken biryani. Anjali had veg biryani, Farah had mutton rogan josh. We all had raita and soft drinks. Anjali paid.",
+    title: "R4: Spice Route (15% Proportional Discount)"
+  }
+};
 
 // DOM Elements
 const form = document.getElementById('split-form');
@@ -12,29 +34,91 @@ const dropzonePrompt = document.getElementById('dropzone-prompt');
 const previewArea = document.getElementById('preview-area');
 const receiptPreview = document.getElementById('receipt-preview');
 const previewFilename = document.getElementById('preview-filename');
+const previewMeta = document.getElementById('preview-meta');
 const removeFileBtn = document.getElementById('remove-file-btn');
 const descriptionInput = document.getElementById('description-input');
-const loadSampleBtn = document.getElementById('load-sample-btn');
 const submitBtn = document.getElementById('submit-btn');
 
+// Config & Settings Elements
+const settingsToggleBtn = document.getElementById('settings-toggle-btn');
+const apiConfigPanel = document.getElementById('api-config-panel');
+const apiUrlInput = document.getElementById('api-url-input');
+const saveApiUrlBtn = document.getElementById('save-api-url-btn');
+const testApiHealthBtn = document.getElementById('test-api-health-btn');
+const apiTestResult = document.getElementById('api-test-result');
+const apiStatusBadge = document.getElementById('api-status-badge');
+
+// Results & Copy Elements
 const loadingIndicator = document.getElementById('loading-indicator');
 const errorCard = document.getElementById('error-card');
 const errorMessage = document.getElementById('error-message');
 const resultsContainer = document.getElementById('results-container');
+const copyTableBtn = document.getElementById('copy-table-btn');
+const copySettleBtn = document.getElementById('copy-settle-btn');
+const rawJsonViewer = document.getElementById('raw-json-viewer');
 
-// Results elements
-const reconciliationBanner = document.getElementById('reconciliation-banner');
-const reconIcon = document.getElementById('recon-icon');
-const reconTitle = document.getElementById('recon-title');
-const reconSubtitle = document.getElementById('recon-subtitle');
-const statGrandTotal = document.getElementById('stat-grand-total');
-const statPersonSum = document.getElementById('stat-person-sum');
-const splitTableBody = document.getElementById('split-table-body');
-const paidByName = document.getElementById('paid-by-name');
-const settleUpList = document.getElementById('settle-up-list');
-const assumptionsList = document.getElementById('assumptions-list');
-const flagsBlock = document.getElementById('flags-block');
-const flagsList = document.getElementById('flags-list');
+// Initialize API URL Input & Health Check
+apiUrlInput.value = API_BASE_URL;
+checkApiHealth(API_BASE_URL);
+
+// Settings Panel Toggle
+settingsToggleBtn.addEventListener('click', () => {
+  apiConfigPanel.classList.toggle('hidden');
+});
+
+saveApiUrlBtn.addEventListener('click', () => {
+  const newUrl = apiUrlInput.value.trim().replace(/\/+$/, '');
+  if (!newUrl) return;
+  API_BASE_URL = newUrl;
+  localStorage.setItem('fair_split_api_url', newUrl);
+  checkApiHealth(newUrl);
+  apiTestResult.textContent = 'Saved!';
+  apiTestResult.style.color = '#15803D';
+  setTimeout(() => { apiTestResult.textContent = ''; }, 2500);
+});
+
+testApiHealthBtn.addEventListener('click', () => {
+  const targetUrl = apiUrlInput.value.trim().replace(/\/+$/, '');
+  checkApiHealth(targetUrl, true);
+});
+
+async function checkApiHealth(url, isManualTest = false) {
+  if (isManualTest) apiTestResult.textContent = 'Testing /health...';
+  try {
+    const res = await fetch(`${url}/health`, { method: 'GET' });
+    if (res.ok) {
+      apiStatusBadge.className = 'badge-online';
+      apiStatusBadge.textContent = url.includes('localhost') ? 'API: Local (200 OK)' : 'API: Live (200 OK)';
+      if (isManualTest) {
+        apiTestResult.textContent = 'Connected (200 OK)';
+        apiTestResult.style.color = '#15803D';
+      }
+    } else {
+      throw new Error(`HTTP ${res.status}`);
+    }
+  } catch (err) {
+    apiStatusBadge.className = 'badge-offline';
+    apiStatusBadge.textContent = 'API: Disconnected';
+    if (isManualTest) {
+      apiTestResult.textContent = `Unreachable: ${err.message}`;
+      apiTestResult.style.color = '#B91C1C';
+    }
+  }
+}
+
+// Preset Scenario Chips Handler
+document.querySelectorAll('.sample-chip').forEach((chip) => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.sample-chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+
+    const sampleKey = chip.getAttribute('data-sample');
+    if (SAMPLE_PRESETS[sampleKey]) {
+      descriptionInput.value = SAMPLE_PRESETS[sampleKey].description;
+      descriptionInput.focus();
+    }
+  });
+});
 
 // File Upload & Base64 Conversion
 fileInput.addEventListener('change', (e) => {
@@ -55,9 +139,12 @@ function handleFileSelection(file) {
     // Strip data-URI prefix (e.g. "data:image/png;base64,") for API payload
     selectedBase64Image = dataUrl.split(',')[1];
 
-    // Show preview thumbnail
+    // Show preview thumbnail and file size
     receiptPreview.src = dataUrl;
     previewFilename.textContent = file.name;
+    const sizeKb = (file.size / 1024).toFixed(1);
+    previewMeta.textContent = `${sizeKb} KB • ${file.type.split('/')[1].toUpperCase()}`;
+
     dropzonePrompt.classList.add('hidden');
     previewArea.classList.remove('hidden');
     hideError();
@@ -96,11 +183,6 @@ dropzone.addEventListener('drop', (e) => {
   }
 });
 
-// Load Sample R2 Description
-loadSampleBtn.addEventListener('click', () => {
-  descriptionInput.value = 'Four of us: Aman, Priya, Karan, Sara. The Gulab Jamun was shared just by Priya and Karan. Everything else was common to all four. Priya paid.';
-});
-
 // Form Submission
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -126,7 +208,8 @@ form.addEventListener('submit', async (e) => {
       description: description
     };
 
-    const response = await fetch(`${API_BASE_URL}/split`, {
+    const targetUrl = API_BASE_URL.replace(/\/+$/, '');
+    const response = await fetch(`${targetUrl}/split`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -141,6 +224,7 @@ form.addEventListener('submit', async (e) => {
       throw new Error(errorDetail);
     }
 
+    lastSplitResponse = responseData;
     renderResults(responseData);
   } catch (err) {
     showError(`Error (${err.message})`);
@@ -206,6 +290,13 @@ function renderResults(data) {
   }
 
   // 1. Reconciliation Banner
+  const reconciliationBanner = document.getElementById('reconciliation-banner');
+  const reconIcon = document.getElementById('recon-icon');
+  const reconTitle = document.getElementById('recon-title');
+  const reconSubtitle = document.getElementById('recon-subtitle');
+  const statGrandTotal = document.getElementById('stat-grand-total');
+  const statPersonSum = document.getElementById('stat-person-sum');
+
   const isMatch = data.reconciliation && data.reconciliation.matches_bill;
   statGrandTotal.textContent = `₹${data.grand_total.toFixed(2)}`;
   statPersonSum.textContent = `₹${data.reconciliation.sum_of_person_totals.toFixed(2)}`;
@@ -223,15 +314,14 @@ function renderResults(data) {
   }
 
   // 2. Per Person Table
+  const splitTableBody = document.getElementById('split-table-body');
   splitTableBody.innerHTML = '';
   const payer = data.paid_by ? data.paid_by.trim().toLowerCase() : null;
-
 
   data.per_person.forEach((person) => {
     const tr = document.createElement('tr');
     const isPayer = payer && person.name.trim().toLowerCase() === payer;
 
-    // Items list badges
     const itemsHtml = person.items.map(item => `
       <span class="item-badge ${item.is_shared ? 'shared' : ''}">
         ${escapeHtml(item.name)} (₹${item.amount.toFixed(2)}${item.is_shared ? ' - shared' : ''})
@@ -254,6 +344,8 @@ function renderResults(data) {
   });
 
   // 3. Settle Up Section
+  const paidByName = document.getElementById('paid-by-name');
+  const settleUpList = document.getElementById('settle-up-list');
   paidByName.textContent = data.paid_by || 'Not Specified';
   settleUpList.innerHTML = '';
 
@@ -277,6 +369,10 @@ function renderResults(data) {
   }
 
   // 4. Assumptions & Flags
+  const assumptionsList = document.getElementById('assumptions-list');
+  const flagsBlock = document.getElementById('flags-block');
+  const flagsList = document.getElementById('flags-list');
+
   assumptionsList.innerHTML = '';
   if (data.assumptions && data.assumptions.length > 0) {
     data.assumptions.forEach(assump => {
@@ -302,10 +398,40 @@ function renderResults(data) {
     flagsBlock.classList.add('hidden');
   }
 
+  // 5. Raw JSON Inspector
+  rawJsonViewer.textContent = JSON.stringify(data, null, 2);
+
   // Reveal results
   resultsContainer.classList.remove('hidden');
   resultsContainer.scrollIntoView({ behavior: 'smooth' });
 }
+
+// Copy Utilities
+copyTableBtn.addEventListener('click', () => {
+  if (!lastSplitResponse || !lastSplitResponse.per_person) return;
+  let text = "Person\tSubtotal\tTax Share\tService Share\tDiscount Share\tTotal Payable\n";
+  lastSplitResponse.per_person.forEach(p => {
+    text += `${p.name}\t₹${p.subtotal.toFixed(2)}\t₹${p.tax_share.toFixed(2)}\t₹${p.service_share.toFixed(2)}\t₹${p.discount_share.toFixed(2)}\t₹${p.total.toFixed(2)}\n`;
+  });
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = copyTableBtn.textContent;
+    copyTableBtn.textContent = 'Copied! ✓';
+    setTimeout(() => { copyTableBtn.textContent = orig; }, 2000);
+  });
+});
+
+copySettleBtn.addEventListener('click', () => {
+  if (!lastSplitResponse || !lastSplitResponse.settle_up || lastSplitResponse.settle_up.length === 0) return;
+  let text = `Settle-Up Reimbursements (Paid by ${lastSplitResponse.paid_by || 'Unknown'}):\n`;
+  lastSplitResponse.settle_up.forEach(t => {
+    text += `• ${t.from} pays ${t.to}: ₹${t.amount.toFixed(2)}\n`;
+  });
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = copySettleBtn.textContent;
+    copySettleBtn.textContent = 'Copied! ✓';
+    setTimeout(() => { copySettleBtn.textContent = orig; }, 2000);
+  });
+});
 
 function escapeHtml(str) {
   if (!str) return '';

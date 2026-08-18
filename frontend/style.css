@@ -51,6 +51,12 @@ body {
   border-bottom: 1px solid var(--border-color);
 }
 
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
 .logo-area {
   display: flex;
   align-items: center;
@@ -74,6 +80,68 @@ body {
   margin-top: 2px;
 }
 
+.api-settings-area {
+  display: flex;
+  align-items: center;
+}
+
+.badge-online {
+  background-color: #DCFCE7;
+  color: #15803D;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.badge-offline {
+  background-color: #FEE2E2;
+  color: #991B1B;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* API Config Panel */
+.api-config-panel {
+  margin-top: 14px;
+  padding: 12px 16px;
+  background-color: #F1F5F9;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.config-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.config-input-group {
+  display: flex;
+  gap: 8px;
+}
+
+.config-input {
+  flex: 1;
+  font-family: var(--mono-font);
+  font-size: 13px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background-color: #FFFFFF;
+}
+
+.config-feedback {
+  font-size: 12px;
+  font-weight: 500;
+}
+
 /* Main Cards */
 .card {
   background: var(--bg-card);
@@ -84,12 +152,109 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
+.card-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .card-title {
   font-size: 17px;
   font-weight: 600;
-  margin-bottom: 16px;
   color: var(--text-main);
   letter-spacing: -0.2px;
+  margin-bottom: 0;
+}
+
+/* Sample Chips */
+.sample-chips-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sample-chips-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.sample-chip {
+  background-color: #F1F5F9;
+  border: 1px solid var(--border-color);
+  border-radius: 9999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sample-chip:hover {
+  background-color: #E2E8F0;
+  border-color: #CBD5E1;
+}
+
+.sample-chip.active {
+  background-color: var(--primary);
+  color: #FFFFFF;
+  border-color: var(--primary);
+}
+
+/* Buttons (Small Utilities) */
+.btn-primary-sm {
+  background-color: var(--primary);
+  color: #FFFFFF;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.btn-primary-sm:hover {
+  background-color: var(--primary-hover);
+}
+
+.btn-secondary-sm {
+  background-color: #FFFFFF;
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s;
+}
+
+.btn-secondary-sm:hover {
+  background-color: #F8FAFC;
+  border-color: #CBD5E1;
+}
+
+.required-star {
+  color: #EF4444;
+}
+
+.form-sublabel {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.preview-meta {
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 /* Form Controls */
@@ -612,6 +777,34 @@ body {
 
 .warning-list {
   color: var(--warning-text);
+}
+
+/* Raw JSON Inspector */
+.json-card {
+  padding: 16px 20px;
+  cursor: pointer;
+}
+
+.json-summary {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  user-select: none;
+}
+
+.raw-json-viewer {
+  margin-top: 12px;
+  padding: 14px;
+  background-color: #0F172A;
+  color: #38BDF8;
+  border-radius: var(--radius-md);
+  font-family: var(--mono-font);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-x: auto;
+  max-height: 400px;
 }
 
 /* Footer */

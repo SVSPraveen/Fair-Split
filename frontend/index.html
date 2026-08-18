@@ -7,40 +7,70 @@
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
   <div class="app-container">
     <header class="app-header">
-      <div class="logo-area">
-        <span class="logo-icon">🧾</span>
-        <div>
-          <h1>Fair-Split</h1>
-          <p class="subtitle">Receipt OCR &bull; Group Description Parsing &bull; Proportional Bill Settlement</p>
+      <div class="header-top">
+        <div class="logo-area">
+          <span class="logo-icon">🧾</span>
+          <div>
+            <h1>Fair-Split</h1>
+            <p class="subtitle">Receipt OCR &bull; Group Description Parsing &bull; Proportional Bill Settlement</p>
+          </div>
         </div>
+        <!-- API URL Settings Toggle -->
+        <div class="api-settings-area">
+          <button type="button" id="settings-toggle-btn" class="btn-secondary-sm" title="Configure API Endpoint">
+            ⚙️ <span id="api-status-badge" class="badge-online">API: Local</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Collapsible API Config Bar -->
+      <div id="api-config-panel" class="api-config-panel hidden">
+        <label for="api-url-input" class="config-label">Backend API URL:</label>
+        <div class="config-input-group">
+          <input type="text" id="api-url-input" class="config-input" placeholder="http://localhost:8000" value="http://localhost:8000">
+          <button type="button" id="save-api-url-btn" class="btn-primary-sm">Save</button>
+          <button type="button" id="test-api-health-btn" class="btn-secondary-sm">Test /health</button>
+        </div>
+        <span id="api-test-result" class="config-feedback"></span>
       </div>
     </header>
 
     <main class="main-content">
       <!-- Input Section -->
       <section class="card input-card">
-        <h2 class="card-title">1. Bill & Group Input</h2>
+        <div class="card-header-row">
+          <h2 class="card-title">1. Bill & Group Input</h2>
+          <!-- Preset Sample Chips -->
+          <div class="sample-chips-wrapper">
+            <span class="sample-chips-label">Load Preset:</span>
+            <button type="button" class="sample-chip" data-sample="R1">R1: Cafe</button>
+            <button type="button" class="sample-chip active" data-sample="R2">R2: Tamarind</button>
+            <button type="button" class="sample-chip" data-sample="R3">R3: Italian</button>
+            <button type="button" class="sample-chip" data-sample="R4">R4: Discount</button>
+          </div>
+        </div>
         
         <form id="split-form" class="split-form">
           <!-- Receipt Upload Box -->
           <div class="form-group">
-            <label class="form-label" for="receipt-file">Receipt Image</label>
+            <label class="form-label" for="receipt-file">Receipt Image <span class="required-star">*</span></label>
             <div class="upload-dropzone" id="dropzone">
               <input type="file" id="receipt-file" accept="image/*" class="file-input" required>
               <div class="dropzone-content" id="dropzone-prompt">
                 <span class="upload-icon">📁</span>
                 <p class="upload-text"><strong>Click to upload</strong> or drag and drop receipt image</p>
-                <p class="upload-hint">Supports PNG, JPEG, WEBP</p>
+                <p class="upload-hint">Supports PNG, JPEG, WEBP (Client-side base64 encoded)</p>
               </div>
               <div class="preview-area hidden" id="preview-area">
                 <img id="receipt-preview" alt="Receipt preview" class="receipt-thumbnail">
                 <div class="preview-info">
                   <span id="preview-filename" class="preview-filename"></span>
+                  <span id="preview-meta" class="preview-meta"></span>
                   <button type="button" id="remove-file-btn" class="btn-text">Change Image</button>
                 </div>
               </div>
@@ -50,8 +80,8 @@
           <!-- Description Textarea -->
           <div class="form-group">
             <div class="label-with-actions">
-              <label class="form-label" for="description-input">Group Dining Description</label>
-              <button type="button" id="load-sample-btn" class="btn-text">Load Sample (R2)</button>
+              <label class="form-label" for="description-input">Group Dining Description <span class="required-star">*</span></label>
+              <span class="form-sublabel">Natural language "who had what & who paid"</span>
             </div>
             <textarea 
               id="description-input" 
@@ -60,11 +90,12 @@
               placeholder="e.g. Four of us: Aman, Priya, Karan, Sara. The Gulab Jamun was shared just by Priya and Karan. Everything else was common to all four. Priya paid."
               required
             ></textarea>
-            <p class="form-hint">Describe who was in the party, individual/shared items, and who paid the bill.</p>
+            <p class="form-hint">Describe party members, shared/individual item consumption, and the bill payer.</p>
           </div>
 
           <button type="submit" id="submit-btn" class="btn-primary">
             <span class="btn-text-main">Calculate Fair Split</span>
+            <span class="btn-icon">&rarr;</span>
           </button>
         </form>
       </section>
@@ -74,7 +105,7 @@
         <div class="spinner"></div>
         <div class="loading-text-area">
           <h3 id="loading-heading">Processing Bill Split...</h3>
-          <p id="loading-subtext">Executing OCR vision extraction, description cross-referencing, and proportional math. This may take 10–20 seconds.</p>
+          <p id="loading-subtext">Executing OCR vision extraction, description cross-referencing, and proportional settlement math.</p>
         </div>
       </section>
 
@@ -109,7 +140,7 @@
             <span id="recon-icon" class="recon-icon">✅</span>
             <div>
               <h3 id="recon-title" class="recon-title">Bill Reconciled Exactly</h3>
-              <p id="recon-subtitle" class="recon-subtitle">Sum of individual totals matches bill grand total.</p>
+              <p id="recon-subtitle" class="recon-subtitle">Sum of individual totals matches bill grand total within tolerance.</p>
             </div>
           </div>
           <div class="recon-stats">
@@ -126,7 +157,10 @@
 
         <!-- Per Person Breakdown Table -->
         <div class="card">
-          <h2 class="card-title">2. Itemized Breakdown Per Person</h2>
+          <div class="card-header-row">
+            <h2 class="card-title">2. Itemized Breakdown Per Person</h2>
+            <button type="button" id="copy-table-btn" class="btn-secondary-sm">Copy Table</button>
+          </div>
 
           <div class="table-responsive">
             <table class="split-table" id="split-table">
@@ -150,7 +184,10 @@
 
         <!-- Settle Up Section -->
         <div class="card">
-          <h2 class="card-title">3. Settle Up (Direct Reimbursements)</h2>
+          <div class="card-header-row">
+            <h2 class="card-title">3. Settle Up (Direct Reimbursements)</h2>
+            <button type="button" id="copy-settle-btn" class="btn-secondary-sm">Copy Settle-Up Summary</button>
+          </div>
           <div class="settle-up-meta">
             <p><strong>Paid by:</strong> <span id="paid-by-name" class="highlight-payer">Priya</span></p>
           </div>
@@ -175,6 +212,12 @@
             </ul>
           </div>
         </div>
+
+        <!-- Raw JSON Inspector -->
+        <details class="card json-card" id="json-details">
+          <summary class="json-summary">View Raw API Payload (JSON)</summary>
+          <pre id="raw-json-viewer" class="raw-json-viewer"></pre>
+        </details>
       </section>
     </main>
 
@@ -186,3 +229,4 @@
   <script src="app.js"></script>
 </body>
 </html>
+
