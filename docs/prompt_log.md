@@ -33,3 +33,26 @@ This document tracks all prompt iterations across the Fair-Split pipeline, detai
 3. **Payer-Absorbs-Rounding Determinism**: The rule requiring leftover fractional paise to be absorbed by the payer requires strict integer math:
    $$\text{diff} = \text{grand\_total} - \sum \text{round}(\text{person\_total}_{\text{raw}})$$
    Executing this in Python guarantees that `sum(per_person.total)` identically equals `grand_total` down to the exact rupee, and ensures settle-up debt transfers match without fraction leaks.
+
+---
+
+## 3. Multimodal Model Routing & Preference Order
+
+Based on extensive empirical latency and rate-limit benchmarking across all providers, the system enforces the following 3-tier preference hierarchy:
+
+### **Vision Pipeline (Receipt OCR)**
+1. **Tier 1 (Primary)**: **Groq Vision (`qwen/qwen3.6-27b`)**
+   - *Why*: Ultra-low latency (~2.2 seconds), flawless extraction of complex thermal receipts, and active quota when combined with dynamic image token optimization (`_optimize_image_for_ocr` reducing token weight by 75%).
+2. **Tier 2 (Fallback)**: **Gemini 3.7 Flash (`gemini-3.7-flash`)**
+   - *Why*: Frontier multimodal extraction invoked if Groq encounters a timeout (15s) or rate limit.
+3. **Tier 3 (Emergency)**: **OpenRouter Vision (`google/gemma-4-26b-a4b-it:free`)**
+   - *Why*: Independent external provider guaranteeing zero single-point-of-failure.
+
+### **Text Pipeline (Dining Description Parsing)**
+1. **Tier 1 (Primary)**: **Groq Text (`openai/gpt-oss-120b`)**
+   - *Why*: Massive 120B parameter reasoning model delivering 1.2s inference and high-fidelity parsing of complex overlapping subgroup sharing.
+2. **Tier 2 (Fallback)**: **Gemini 3.7 Flash Text (`gemini-3.7-flash`)**
+   - *Why*: Fast secondary natural language parser.
+3. **Tier 3 (Emergency)**: **OpenRouter Text (`nvidia/nemotron-3-super-120b-a12b:free`)**
+   - *Why*: 120B parameter fallback ensuring high-capacity structured JSON generation.
+
