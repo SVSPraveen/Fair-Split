@@ -146,34 +146,42 @@ def parse_description(
     raw_response = ""
     parse_error = None
     used_fb = False
+    fb_reason = None
 
     # Attempt 1: Primary prompt
     try:
-        raw_response, used_fb = client.generate_text_with_status(
+        raw_response, used_fb, fb_reason = client.generate_text_with_status(
             prompt=prompt,
             force_fallback=force_fallback
         )
         parsed_dict = _clean_and_parse_json(raw_response)
         desc_obj = DescriptionData.model_validate(parsed_dict)
         desc_obj.used_fallback = used_fb
+        desc_obj.fallback_reason = fb_reason
         return desc_obj
     except (json.JSONDecodeError, ValidationError, Exception) as e:
         parse_error = e
 
     # Attempt 2: Retry with strict prompt
+    if isinstance(parse_error, TimeoutError):
+        raise parse_error
+
     retry_prompt = STRICT_DESCRIPTION_RETRY_PROMPT_TEMPLATE.format(
         known_items_json=known_items_json,
         description=description.strip()
     )
     try:
-        raw_response, used_fb = client.generate_text_with_status(
+        raw_response, used_fb, fb_reason = client.generate_text_with_status(
             prompt=retry_prompt,
             force_fallback=force_fallback
         )
         parsed_dict = _clean_and_parse_json(raw_response)
         desc_obj = DescriptionData.model_validate(parsed_dict)
         desc_obj.used_fallback = used_fb
+        desc_obj.fallback_reason = fb_reason
         return desc_obj
+    except TimeoutError as retry_timeout:
+        raise retry_timeout
     except Exception as retry_err:
         raise ValueError(
             f"Description parsing failed after retry. "

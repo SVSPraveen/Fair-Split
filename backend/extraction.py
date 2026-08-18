@@ -217,8 +217,9 @@ def extract_receipt(
     raw_response = ""
     parse_error = None
     used_fb = False
+    fb_reason = None
     try:
-        raw_response, used_fb = client.generate_vision_with_status(
+        raw_response, used_fb, fb_reason = client.generate_vision_with_status(
             prompt=PRIMARY_EXTRACTION_PROMPT,
             image_bytes=image_bytes,
             force_fallback=force_fallback
@@ -230,14 +231,18 @@ def extract_receipt(
 
     # Attempt 2: Retry with stricter prompt if attempt 1 failed
     if parse_error is not None:
+        if isinstance(parse_error, TimeoutError):
+            raise parse_error
         try:
-            raw_response, used_fb = client.generate_vision_with_status(
+            raw_response, used_fb, fb_reason = client.generate_vision_with_status(
                 prompt=STRICT_FALLBACK_PROMPT,
                 image_bytes=image_bytes,
                 force_fallback=force_fallback
             )
             parsed_dict = _clean_and_parse_json(raw_response)
             receipt = ReceiptData.model_validate(parsed_dict)
+        except TimeoutError as retry_timeout:
+            raise retry_timeout
         except Exception as retry_err:
             raise ValueError(
                 f"Receipt extraction failed after retry. "
@@ -246,6 +251,7 @@ def extract_receipt(
             ) from retry_err
 
     receipt.used_fallback = used_fb
+    receipt.fallback_reason = fb_reason
 
     # Run self-check validations
     flags = _run_self_checks(receipt)

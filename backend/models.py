@@ -68,6 +68,7 @@ class ReceiptData(BaseModel):
     grand_total: float = Field(..., description="Final payable grand total")
     extraction_flags: List[str] = Field(default_factory=list, description="Quality and validation warning flags")
     used_fallback: bool = Field(default=False, description="True if fallback vision provider was used")
+    fallback_reason: Optional[str] = Field(None, description="Reason fallback was triggered: 'timeout', 'rate_limit_429', 'error'")
 
     @field_validator("subtotal", "service_charge", "round_off", "grand_total", mode="before")
     @classmethod
@@ -137,6 +138,8 @@ class DescriptionData(BaseModel):
         description="Assumptions or inferences made during parsing when details were implicit"
     )
     used_fallback: bool = Field(default=False, description="True if fallback text provider was used")
+    fallback_reason: Optional[str] = Field(None, description="Reason fallback was triggered: 'timeout', 'rate_limit_429', 'error'")
+
 
 
 

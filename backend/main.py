@@ -80,6 +80,12 @@ def split_bill(request: SplitRequest) -> SplitResult:
     # 2. Receipt OCR & Structured Extraction
     try:
         receipt_data = extract_receipt(image_bytes)
+    except TimeoutError as timeout_err:
+        logger.error(f"Receipt extraction timed out: {timeout_err}")
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=f"Receipt extraction timed out: {str(timeout_err)}"
+        )
     except Exception as extract_err:
         logger.error(f"Receipt extraction failed: {extract_err}")
         raise HTTPException(
@@ -93,6 +99,12 @@ def split_bill(request: SplitRequest) -> SplitResult:
         description_data = parse_description(
             description=request.description,
             known_items=known_items
+        )
+    except TimeoutError as timeout_err:
+        logger.error(f"Description parsing timed out: {timeout_err}")
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=f"Description parsing timed out: {str(timeout_err)}"
         )
     except Exception as parse_err:
         logger.error(f"Description parsing failed: {parse_err}")

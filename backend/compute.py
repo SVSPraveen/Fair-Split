@@ -235,9 +235,22 @@ def compute_split(
         
     # Check fallback providers used
     if getattr(receipt, "used_fallback", False):
-        confidence_reasons.append("Vision OCR extraction used fallback model instead of primary provider.")
+        fb_reason = getattr(receipt, "fallback_reason", None)
+        if fb_reason == "timeout":
+            confidence_reasons.append("Vision OCR extraction: Gemini timed out after 15s, falling back to OpenRouter.")
+        elif fb_reason == "rate_limit_429":
+            confidence_reasons.append("Vision OCR extraction: Gemini returned 429 rate limit, falling back to OpenRouter.")
+        else:
+            confidence_reasons.append("Vision OCR extraction utilized fallback model instead of primary provider.")
+
     if getattr(description, "used_fallback", False):
-        confidence_reasons.append("Description parsing used fallback text model instead of primary provider.")
+        fb_reason = getattr(description, "fallback_reason", None)
+        if fb_reason == "timeout":
+            confidence_reasons.append("Description parsing: Groq timed out after 10s, falling back to OpenRouter.")
+        elif fb_reason == "rate_limit_429":
+            confidence_reasons.append("Description parsing: Groq returned 429 rate limit, falling back to OpenRouter.")
+        else:
+            confidence_reasons.append("Description parsing utilized fallback model instead of primary provider.")
         
     # Check unmatched mentions or unclear references
     for um in description.unmatched_mentions:
