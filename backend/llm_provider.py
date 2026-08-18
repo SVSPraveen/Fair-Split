@@ -264,15 +264,38 @@ class LLMProvider:
                     logger.warning(f"Groq text returned 429, falling back to OpenRouter.")
                 else:
                     fallback_reason = "error"
-                    logger.warning(f"Groq text call failed ({e}). Attempting OpenRouter fallback.")
+                    logger.warning(f"Groq text call failed ({e}). Attempting fallback.")
 
-        # Fallback to OpenRouter Free Text
+        # Fallback Text: Try Gemini first, then OpenRouter
         used_fallback = True
         if fallback_reason is None:
             fallback_reason = "forced_fallback" if force_fallback else "primary_unavailable"
 
+        # 1. Try Gemini Text
+        if self._gemini_client:
+            try:
+                full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+                response = self._gemini_client.models.generate_content(
+                    model=GEMINI_VISION_PRIMARY,
+                    contents=full_prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=0.1,
+                        max_output_tokens=2048,
+                        http_options=types.HttpOptions(timeout=int(timeout_seconds * 1000))
+                    )
+                )
+                if response.text:
+                    return response.text, used_fallback, fallback_reason
+            except (httpx.TimeoutException, TimeoutError) as gemini_to_err:
+                logger.warning(f"Gemini text fallback timed out: {gemini_to_err}")
+                if not self._openrouter_client:
+                    raise TimeoutError(f"Description parsing timed out after {int(timeout_seconds)}s on Gemini ({GEMINI_VISION_PRIMARY}).") from gemini_to_err
+            except Exception as gemini_err:
+                logger.warning(f"Gemini text fallback failed ({gemini_err}), falling back to OpenRouter.")
+
+        # 2. Try OpenRouter Text
         if not self._openrouter_client:
-            raise ValueError("OpenRouter client not initialized. Cannot perform text fallback.")
+            raise ValueError("No fallback text client available (both Groq and OpenRouter unavailable).")
 
         messages = []
         if system_prompt:
