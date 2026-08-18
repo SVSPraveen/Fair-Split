@@ -44,12 +44,21 @@ class LLMProvider:
 
         # Clients
         self._gemini_client = genai.Client(api_key=self.gemini_key) if self.gemini_key else None
-        self._groq_client = Groq(api_key=self.groq_key, timeout=TEXT_TIMEOUT_SECONDS) if self.groq_key else None
+        self._groq_client = (
+            Groq(
+                api_key=self.groq_key,
+                timeout=TEXT_TIMEOUT_SECONDS,
+                max_retries=0
+            )
+            if self.groq_key
+            else None
+        )
         self._openrouter_client = (
             OpenAI(
                 base_url="https://openrouter.ai/api/v1",
                 api_key=self.openrouter_key,
-                timeout=VISION_TIMEOUT_SECONDS
+                timeout=VISION_TIMEOUT_SECONDS,
+                max_retries=0
             )
             if self.openrouter_key
             else None
