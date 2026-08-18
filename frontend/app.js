@@ -10,19 +10,33 @@ let lastSplitResponse = null;
 const SAMPLE_PRESETS = {
   R1: {
     description: "Three of us: Ravi, Neha, Sameer. Ravi had the cappuccino and sandwich, Neha had pasta and lime soda, Sameer had the brownie. Sameer paid.",
-    title: "R1: Brew & Bite Cafe (Individual Items)"
+    imageFile: "samples/R1.png",
+    filename: "R1_cafe_receipt.png",
+    title: "R1: Brew & Bite Cafe"
   },
   R2: {
     description: "Four of us: Aman, Priya, Karan, Sara. The Gulab Jamun was shared just by Priya and Karan. Everything else was common to all four. Priya paid.",
-    title: "R2: Tamarind Kitchen (Shared Dishes, Priya Paid)"
+    imageFile: "samples/R2.png",
+    filename: "R2_tamarind_receipt.png",
+    title: "R2: Tamarind Kitchen"
   },
   R3: {
     description: "Three of us: Ishaan, Meera, Rohit. We all shared the pizza, pasta, and garlic bread. Ishaan and Rohit shared the craft beer. Meera had the virgin mojito. Rohit paid.",
-    title: "R3: The Daily Grind (Shared Food & Drinks)"
+    imageFile: "samples/R3.png",
+    filename: "R3_italian_receipt.png",
+    title: "R3: The Daily Grind"
   },
   R4: {
     description: "Four of us: Dev, Nikhil, Anjali, Farah. Dev and Nikhil shared the chicken biryani. Anjali had veg biryani, Farah had mutton rogan josh. We all had raita and soft drinks. Anjali paid.",
-    title: "R4: Spice Route (15% Proportional Discount)"
+    imageFile: "samples/R4.png",
+    filename: "R4_discount_receipt.png",
+    title: "R4: Spice Route"
+  },
+  R6: {
+    description: "Party of six: Vikram, Ananya, Kabir, Rhea, Siddharth, Tara. Vikram and Kabir shared the 3 pints of Craft IPA Beer. Ananya and Tara had the Mint Mojitos. Siddharth and Rhea shared the Smoked BBQ Pork Ribs and Crispy Calamari. All six of us shared the 2 Truffle Pizzas, Loaded Nachos, and Mineral Water. Ananya had the Caesar Salad. Rhea, Tara, and Vikram shared the 2 Chocolate Lava Cakes. Vikram paid the entire bill.",
+    imageFile: "samples/R6.png",
+    filename: "R6_urban_brewery_complex.png",
+    title: "R6: Urban Brewery Feast (10 Items, Multi-Tax, Discount, 6-Person Group)"
   }
 };
 
@@ -106,19 +120,48 @@ async function checkApiHealth(url, isManualTest = false) {
   }
 }
 
-// Preset Scenario Chips Handler
+// Preset Scenario Chips Handler (Loads both description & receipt image)
 document.querySelectorAll('.sample-chip').forEach((chip) => {
   chip.addEventListener('click', () => {
     document.querySelectorAll('.sample-chip').forEach(c => c.classList.remove('active'));
     chip.classList.add('active');
 
     const sampleKey = chip.getAttribute('data-sample');
-    if (SAMPLE_PRESETS[sampleKey]) {
-      descriptionInput.value = SAMPLE_PRESETS[sampleKey].description;
-      descriptionInput.focus();
-    }
+    loadSamplePreset(sampleKey);
   });
 });
+
+async function loadSamplePreset(presetKey) {
+  const preset = SAMPLE_PRESETS[presetKey];
+  if (!preset) return;
+  descriptionInput.value = preset.description;
+
+  // Auto-fetch and load sample image into base64
+  try {
+    const res = await fetch(preset.imageFile);
+    if (res.ok) {
+      const blob = await res.blob();
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target.result;
+        selectedBase64Image = dataUrl.split(',')[1];
+        receiptPreview.src = dataUrl;
+        previewFilename.textContent = preset.filename;
+        const sizeKb = (blob.size / 1024).toFixed(1);
+        previewMeta.textContent = `${sizeKb} KB • Sample Preset`;
+        dropzonePrompt.classList.add('hidden');
+        previewArea.classList.remove('hidden');
+        hideError();
+      };
+      reader.readAsDataURL(blob);
+    }
+  } catch (err) {
+    console.warn("Could not auto-load sample image:", err);
+  }
+}
+
+// Auto-load default R2 preset on first load
+loadSamplePreset('R2');
 
 // File Upload & Base64 Conversion
 fileInput.addEventListener('change', (e) => {

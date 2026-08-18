@@ -156,3 +156,21 @@ This document logs all 11 edge cases (Cases 1–10 plus the Case 4b variant) exe
   - Rohan and Sneha absorbed 100% of the proportional taxes according to their consumption (Rohan ₹126.00, Sneha ₹105.00).
 - **Verification Status**: Verified with live API execution in `test_edge_cases.py`.
 - **Verdict**: **Handled correctly**
+
+---
+
+### Case 11: High-Complexity Stress Feast (10 Items, Multi-Tax, 15% Discount, 10% Service Charge, 6-Person Group)
+
+- **Input**:
+  - *Receipt*: "The Urban Brewery & Smokehouse" (R6 sample receipt) — 10 line items including Craft IPA Beer (₹1050), Smoked BBQ Ribs (₹680), Truffle Pizza (₹1080), Caesar Salad (₹320), Calamari (₹420), Nachos (₹380), Lava Cake (₹480), Mojitos (₹440), Water (₹120), Packaging (₹50). Subtotal: ₹5020.00. Discount (15% Gold): -₹753.00. Service Charge (10%): ₹426.70. Multi-Tax (CGST 2.5% + SGST 2.5% + Liquor VAT 10%): ₹331.70. Round Off: -₹0.40. Grand Total: ₹5025.00.
+  - *Description*: `"Party of six: Vikram, Ananya, Kabir, Rhea, Siddharth, Tara. Vikram and Kabir shared the 3 pints of Craft IPA Beer. Ananya and Tara had the Fresh Mint Mojitos. Siddharth and Rhea shared the Smoked BBQ Pork Ribs and Crispy Calamari. All six of us shared the 2 Wood-Fired Truffle Pizzas, Loaded Nachos Supreme, and Mineral Water. Ananya had the Classic Caesar Salad. Rhea, Tara, and Vikram shared the 2 Belgian Chocolate Lava Cakes. Vikram paid the entire bill."`
+- **System Behavior**:
+  - Successfully mapped 9 dish assignments across overlapping subgroups (pairs, trios, and full 6-person group).
+  - Detected that `Eco Takeaway Packaging Charge` was unassigned; cross-check defaulted it to shared across all 6 members and flagged `needs_review`.
+  - Applied proportional pre-tax subtotal shares for 15% bill discount, 10% service charge, and composite multi-tax rates.
+  - Nearest rupee rounding produced ₹1.00 discrepancy, which was absorbed by the payer (Vikram) via Rule 5.
+  - Sum of person totals equaled ₹5025.00 (matching printed grand total ₹5025.00).
+  - Generated 5 distinct direct-to-payer settle-up reimbursements from Ananya (₹812), Kabir (₹797), Rhea (₹983), Siddharth (₹822), and Tara (₹652) to Vikram.
+- **Verification Status**: Verified with live execution in `test_r6_hard_complex.py` and `test_edge_cases.py`.
+- **Verdict**: **Handled correctly**
+

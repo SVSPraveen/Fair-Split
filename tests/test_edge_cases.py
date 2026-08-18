@@ -401,6 +401,29 @@ def run_all_edge_case_tests():
     res10 = run_pipeline(img10, desc10)
     results["Case 10"] = res10
 
+    # -------------------------------------------------------------
+    # CASE 11: High-Complexity Stress Feast (10 items, Multi-Tax, Discount, 6-Person Group)
+    # -------------------------------------------------------------
+    print(">>> Running Case 11: High-Complexity Stress Feast (10 Items, Multi-Tax, 6-Person Group)...")
+    r6_img_path = ROOT_DIR / "tests" / "sample_receipts" / "R6.png"
+    if r6_img_path.exists():
+        with open(r6_img_path, "rb") as f:
+            img11 = f.read()
+    else:
+        img11 = img10
+    desc11 = (
+        "Party of six: Vikram, Ananya, Kabir, Rhea, Siddharth, Tara. "
+        "Vikram and Kabir shared the 3 pints of Craft IPA Beer. "
+        "Ananya and Tara had the Fresh Mint Mojitos. "
+        "Siddharth and Rhea shared the Smoked BBQ Pork Ribs and Crispy Calamari. "
+        "All six of us shared the 2 Wood-Fired Truffle Pizzas, Loaded Nachos Supreme, and Mineral Water. "
+        "Ananya had the Classic Caesar Salad. "
+        "Rhea, Tara, and Vikram shared the 2 Belgian Chocolate Lava Cakes. "
+        "Vikram paid the entire bill."
+    )
+    res11 = run_pipeline(img11, desc11)
+    results["Case 11"] = res11
+
     # Save all results to disk for complete traceability
     results_path = ROOT_DIR / "tests" / "edge_case_results.json"
     with open(results_path, "w", encoding="utf-8") as f:
