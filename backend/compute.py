@@ -1,0 +1,228 @@
+import math
+from typing import List, Dict, Optional, Any
+from backend.models import (
+    ReceiptData,
+    DescriptionData,
+    SplitResult,
+    PersonShare,
+    PersonItem,
+    ReconciliationDetail,
+    SettleUpTransaction
+)
+
+
+def _match_item_assignment(item_name: str, assignments: list) -> Optional[Any]:
+    """Matches a receipt item name to an assignment, using exact or normalized substring matching."""
+    norm_item = item_name.strip().lower()
+    for assignment in assignments:
+        norm_assign = assignment.item_name.strip().lower()
+        if norm_item == norm_assign or norm_assign in norm_item or norm_item in norm_assign:
+            return assignment
+    return None
+
+
+def compute_split(
+    receipt: ReceiptData,
+    description: DescriptionData
+) -> SplitResult:
+    """Computes deterministic, proportional itemized bill split and settle-up transactions.
+    
+    Rules applied:
+    1. Individual items assigned 100% to the single consumer.
+    2. Shared items split equally among specific consumers (per-item).
+    3. Tax and service charge allocated proportional to each person's pre-tax food subtotal.
+    4. Bill-level discount allocated proportional to each person's subtotal.
+    5. Round to nearest rupee; leftover paisa diff absorbed by payer if present.
+    6. Edge cases: missing payer, unmatched mentions, unclear references forwarded to flags.
+    """
+    flags: List[str] = []
+    assumptions: List[str] = []
+
+    # 1. Forward flags and assumptions from prior pipeline stages
+    if receipt.extraction_flags:
+        flags.extend(receipt.extraction_flags)
+    for um in description.unmatched_mentions:
+        flags.append(f"Unmatched mention from description: '{um}'")
+    for ur in description.unclear_references:
+        flags.append(f"Unclear reference from description: '{ur}'")
+    if description.parsing_assumptions:
+        assumptions.extend(description.parsing_assumptions)
+
+    # 2. Resolve distinct group members
+    people: List[str] = list(description.people)
+    if not people:
+        # Fallback: extract unique names from item_assignments
+        inferred_names = set()
+        for assign in description.item_assignments:
+            inferred_names.update(assign.consumed_by)
+        people = list(inferred_names) if inferred_names else ["Guest"]
+        assumptions.append(f"People list inferred from item assignments: {people}")
+
+    # 3. Allocate line items to consumers
+    person_items_map: Dict[str, List[PersonItem]] = {p: [] for p in people}
+    person_subtotals: Dict[str, float] = {p: 0.0 for p in people}
+
+    for item in receipt.items:
+        assignment = _match_item_assignment(item.name, description.item_assignments)
+        if assignment and assignment.consumed_by:
+            # Filter consumers that exist in group
+            consumers = [c for c in assignment.consumed_by if c in people]
+            if not consumers:
+                consumers = assignment.consumed_by
+                for c in consumers:
+                    if c not in person_items_map:
+                        person_items_map[c] = []
+                        person_subtotals[c] = 0.0
+                        people.append(c)
+        else:
+            # Not explicitly assigned -> fallback to shared among all known people
+            consumers = people
+            flags.append(f"Item '{item.name}' was not explicitly assigned; defaulted to shared by all {len(people)} people.")
+
+        num_consumers = len(consumers)
+        is_shared = num_consumers > 1
+        split_amount = item.amount / num_consumers
+
+        for c in consumers:
+            person_items_map[c].append(
+                PersonItem(
+                    name=item.name,
+                    amount=round(split_amount, 2),
+                    is_shared=is_shared
+                )
+            )
+            person_subtotals[c] += split_amount
+
+    # 4. Proportional Tax, Service Charge, Discount, and Round-Off Allocation
+    grand_subtotal = sum(person_subtotals.values())
+    if grand_subtotal <= 0:
+        grand_subtotal = receipt.subtotal or receipt.grand_total or 1.0
+
+    # Determine total tax
+    total_tax = 0.0
+    if receipt.tax:
+        if receipt.tax.total_tax is not None:
+            total_tax = receipt.tax.total_tax
+        else:
+            total_tax = (receipt.tax.cgst or 0.0) + (receipt.tax.sgst or 0.0)
+
+    total_service = receipt.service_charge or 0.0
+    total_discount = receipt.discount.amount if receipt.discount else 0.0
+    total_round_off = receipt.round_off or 0.0
+
+    per_person_data: List[Dict[str, Any]] = []
+
+    for p in people:
+        sub = person_subtotals[p]
+        proportion = sub / grand_subtotal if grand_subtotal > 0 else (1.0 / len(people))
+
+        tax_share = round(proportion * total_tax, 2)
+        service_share = round(proportion * total_service, 2)
+        discount_share = round(proportion * total_discount, 2)
+        round_off_share = proportion * total_round_off
+
+        # Raw calculated total before rounding
+        raw_total = sub + (proportion * total_tax) + (proportion * total_service) - (proportion * total_discount) + round_off_share
+        
+        # Round every person's total independently first to nearest rupee
+        rounded_total = float(round(raw_total))
+
+        per_person_data.append({
+            "name": p,
+            "items": person_items_map[p],
+            "subtotal": round(sub, 2),
+            "tax_share": tax_share,
+            "service_share": service_share,
+            "discount_share": discount_share,
+            "raw_total": raw_total,
+            "total": rounded_total
+        })
+
+    # 5. Payer Remainder Absorption (Payer-Only)
+    sum_of_rounded_totals = sum(p["total"] for p in per_person_data)
+    diff = round(receipt.grand_total - sum_of_rounded_totals, 2)
+
+    payer_name = description.payer
+    payer_matched = False
+
+    if payer_name:
+        for p in per_person_data:
+            if p["name"].strip().lower() == payer_name.strip().lower():
+                payer_matched = True
+                p["total"] = float(round(p["total"] + diff))
+                if abs(diff) > 0.001:
+                    assumptions.append(
+                        f"Rounding discrepancy of ₹{diff:+.2f} absorbed by payer ({p['name']}) "
+                        f"to match bill grand total ₹{receipt.grand_total:.2f} exactly."
+                    )
+                break
+
+    if not payer_name or not payer_matched:
+        # Do not absorb remainder anywhere; report discrepancy
+        if abs(diff) > 0.001:
+            flags.append(
+                f"No payer specified to absorb rounding discrepancy of ₹{diff:+.2f}; "
+                f"sum of person totals is ₹{sum_of_rounded_totals:.2f} vs bill grand total ₹{receipt.grand_total:.2f}."
+            )
+
+    # 6. Final PersonShare Construction & Reconciliation
+    per_person_final: List[PersonShare] = []
+    for p in per_person_data:
+        per_person_final.append(
+            PersonShare(
+                name=p["name"],
+                items=p["items"],
+                subtotal=p["subtotal"],
+                tax_share=p["tax_share"],
+                service_share=p["service_share"],
+                discount_share=p["discount_share"],
+                total=p["total"]
+            )
+        )
+
+    final_sum_totals = sum(p.total for p in per_person_final)
+    matches_bill = abs(final_sum_totals - receipt.grand_total) <= 2.0
+
+    if not matches_bill:
+        flags.append(
+            f"Reconciliation mismatch: sum of person totals (₹{final_sum_totals:.2f}) "
+            f"does not match grand total (₹{receipt.grand_total:.2f}) within ₹2.00 tolerance."
+        )
+
+    reconciliation = ReconciliationDetail(
+        sum_of_person_totals=final_sum_totals,
+        matches_bill=matches_bill
+    )
+
+    # 7. Settle-Up Calculations
+    settle_up: List[SettleUpTransaction] = []
+    resolved_paid_by: Optional[str] = None
+
+    if payer_name and payer_matched:
+        # Find exact casing of payer
+        actual_payer_name = next(p.name for p in per_person_final if p.name.strip().lower() == payer_name.strip().lower())
+        resolved_paid_by = actual_payer_name
+        for p in per_person_final:
+            if p.name != actual_payer_name and p.total > 0:
+                settle_up.append(
+                    SettleUpTransaction(
+                        from_person=p.name,
+                        to_person=actual_payer_name,
+                        amount=p.total
+                    )
+                )
+        assumptions.append(
+            f"Direct-to-payer settle-up transactions generated: each non-payer reimburses {actual_payer_name} directly."
+        )
+    else:
+        flags.append("Payer not specified in description. Settle-up transactions cannot be computed.")
+
+    return SplitResult(
+        per_person=per_person_final,
+        grand_total=receipt.grand_total,
+        reconciliation=reconciliation,
+        paid_by=resolved_paid_by,
+        settle_up=settle_up,
+        assumptions=assumptions,
+        flags=flags
+    )

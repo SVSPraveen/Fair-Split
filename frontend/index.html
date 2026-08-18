@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fair-Split — Itemized Bill Splitting Engine</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="logo-area">
+        <span class="logo-icon">🧾</span>
+        <div>
+          <h1>Fair-Split</h1>
+          <p class="subtitle">Receipt OCR &bull; Group Description Parsing &bull; Proportional Bill Settlement</p>
+        </div>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <!-- Input Section -->
+      <section class="card input-card">
+        <h2 class="card-title">1. Bill & Group Input</h2>
+        
+        <form id="split-form" class="split-form">
+          <!-- Receipt Upload Box -->
+          <div class="form-group">
+            <label class="form-label" for="receipt-file">Receipt Image</label>
+            <div class="upload-dropzone" id="dropzone">
+              <input type="file" id="receipt-file" accept="image/*" class="file-input" required>
+              <div class="dropzone-content" id="dropzone-prompt">
+                <span class="upload-icon">📁</span>
+                <p class="upload-text"><strong>Click to upload</strong> or drag and drop receipt image</p>
+                <p class="upload-hint">Supports PNG, JPEG, WEBP</p>
+              </div>
+              <div class="preview-area hidden" id="preview-area">
+                <img id="receipt-preview" alt="Receipt preview" class="receipt-thumbnail">
+                <div class="preview-info">
+                  <span id="preview-filename" class="preview-filename"></span>
+                  <button type="button" id="remove-file-btn" class="btn-text">Change Image</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Description Textarea -->
+          <div class="form-group">
+            <div class="label-with-actions">
+              <label class="form-label" for="description-input">Group Dining Description</label>
+              <button type="button" id="load-sample-btn" class="btn-text">Load Sample (R2)</button>
+            </div>
+            <textarea 
+              id="description-input" 
+              class="form-textarea" 
+              rows="4" 
+              placeholder="e.g. Four of us: Aman, Priya, Karan, Sara. The Gulab Jamun was shared just by Priya and Karan. Everything else was common to all four. Priya paid."
+              required
+            ></textarea>
+            <p class="form-hint">Describe who was in the party, individual/shared items, and who paid the bill.</p>
+          </div>
+
+          <button type="submit" id="submit-btn" class="btn-primary">
+            <span class="btn-text-main">Calculate Fair Split</span>
+          </button>
+        </form>
+      </section>
+
+      <!-- Loading State -->
+      <section id="loading-indicator" class="card loading-card hidden">
+        <div class="spinner"></div>
+        <div class="loading-text-area">
+          <h3 id="loading-heading">Processing Bill Split...</h3>
+          <p id="loading-subtext">Executing OCR vision extraction, description cross-referencing, and proportional math. This may take 10–20 seconds.</p>
+        </div>
+      </section>
+
+      <!-- Error State -->
+      <section id="error-card" class="card error-card hidden">
+        <div class="error-header">
+          <span class="error-icon">⚠️</span>
+          <h3>Request Failed</h3>
+        </div>
+        <p id="error-message" class="error-message"></p>
+      </section>
+
+      <!-- Results Section -->
+      <section id="results-container" class="results-container hidden">
+        <!-- Reconciliation Status Banner -->
+        <div id="reconciliation-banner" class="reconciliation-banner">
+          <div class="recon-left">
+            <span id="recon-icon" class="recon-icon">✅</span>
+            <div>
+              <h3 id="recon-title" class="recon-title">Bill Reconciled Exactly</h3>
+              <p id="recon-subtitle" class="recon-subtitle">Sum of individual totals matches bill grand total.</p>
+            </div>
+          </div>
+          <div class="recon-stats">
+            <div class="stat-item">
+              <span class="stat-label">Printed Grand Total</span>
+              <span id="stat-grand-total" class="stat-value">₹0</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Sum of Person Totals</span>
+              <span id="stat-person-sum" class="stat-value">₹0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Per Person Breakdown Table -->
+        <div class="card">
+          <h2 class="card-title">2. Itemized Breakdown Per Person</h2>
+          <div class="table-responsive">
+            <table class="split-table" id="split-table">
+              <thead>
+                <tr>
+                  <th>Person</th>
+                  <th>Items Consumed</th>
+                  <th class="num-col">Subtotal</th>
+                  <th class="num-col">Tax Share</th>
+                  <th class="num-col">Service Share</th>
+                  <th class="num-col">Discount Share</th>
+                  <th class="num-col total-col">Total Payable</th>
+                </tr>
+              </thead>
+              <tbody id="split-table-body">
+                <!-- Rows injected dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Settle Up Section -->
+        <div class="card">
+          <h2 class="card-title">3. Settle Up (Direct Reimbursements)</h2>
+          <div class="settle-up-meta">
+            <p><strong>Paid by:</strong> <span id="paid-by-name" class="highlight-payer">Priya</span></p>
+          </div>
+          <ul id="settle-up-list" class="settle-up-list">
+            <!-- Settle-up transfers injected dynamically -->
+          </ul>
+        </div>
+
+        <!-- Assumptions & Warnings Section -->
+        <div class="card info-card" id="assumptions-card">
+          <h2 class="card-title">4. Assumptions & Transparency</h2>
+          <div class="notice-block" id="assumptions-block">
+            <h4>Calculation & Parsing Assumptions</h4>
+            <ul id="assumptions-list" class="detail-list">
+              <!-- Injected dynamically -->
+            </ul>
+          </div>
+          <div class="notice-block warning-block hidden" id="flags-block">
+            <h4>Quality & Reconciliation Flags</h4>
+            <ul id="flags-list" class="detail-list warning-list">
+              <!-- Injected dynamically -->
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <p>Fair-Split &bull; Pure Python Deterministic Settlement Engine &bull; FastAPI + Vanilla Web</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
