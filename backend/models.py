@@ -67,6 +67,7 @@ class ReceiptData(BaseModel):
     round_off: Optional[float] = Field(None, description="Round-off adjustment (+/-) if any")
     grand_total: float = Field(..., description="Final payable grand total")
     extraction_flags: List[str] = Field(default_factory=list, description="Quality and validation warning flags")
+    used_fallback: bool = Field(default=False, description="True if fallback vision provider was used")
 
     @field_validator("subtotal", "service_charge", "round_off", "grand_total", mode="before")
     @classmethod
@@ -135,6 +136,8 @@ class DescriptionData(BaseModel):
         default_factory=list,
         description="Assumptions or inferences made during parsing when details were implicit"
     )
+    used_fallback: bool = Field(default=False, description="True if fallback text provider was used")
+
 
 
 class PersonItem(BaseModel):
@@ -167,6 +170,11 @@ class SettleUpTransaction(BaseModel):
         populate_by_name = True
 
 
+class ConfidenceDetail(BaseModel):
+    level: str = Field(..., description="Overall confidence level: 'high' or 'needs_review'")
+    reasons: List[str] = Field(default_factory=list, description="Specific audit reasons when confidence is 'needs_review'")
+
+
 class SplitResult(BaseModel):
     per_person: List[PersonShare] = Field(default_factory=list, description="Breakdown per person")
     grand_total: float = Field(..., description="Grand total from the receipt")
@@ -175,6 +183,7 @@ class SplitResult(BaseModel):
     settle_up: List[SettleUpTransaction] = Field(default_factory=list, description="Settle-up transfer instructions")
     assumptions: List[str] = Field(default_factory=list, description="Assumptions and rounding allocations made")
     flags: List[str] = Field(default_factory=list, description="Reconciliation or parsing warning flags")
+    confidence: ConfidenceDetail = Field(..., description="Anti-hallucination confidence score ('high' vs 'needs_review')")
 
     class Config:
         populate_by_name = True
@@ -183,6 +192,7 @@ class SplitResult(BaseModel):
 class SplitRequest(BaseModel):
     receipt_base64: str = Field(..., description="Base64 encoded receipt image bytes (without data-URI prefix)")
     description: str = Field(..., description="Natural language description of group dining consumption")
+
 
 
 

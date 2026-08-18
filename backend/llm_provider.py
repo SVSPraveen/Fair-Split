@@ -52,7 +52,19 @@ class LLMProvider:
         image_bytes: bytes,
         force_fallback: bool = False
     ) -> str:
-        """Executes a vision request using primary Gemini Flash, falling back to OpenRouter on 429."""
+        text, _ = self.generate_vision_with_status(prompt, image_bytes, force_fallback)
+        return text
+
+    def generate_vision_with_status(
+        self,
+        prompt: str,
+        image_bytes: bytes,
+        force_fallback: bool = False
+    ) -> tuple[str, bool]:
+        """Executes a vision request using primary Gemini Flash, falling back to OpenRouter on 429.
+        Returns: (response_text, used_fallback_boolean)
+        """
+        used_fallback = False
         if not force_fallback and self._gemini_client:
             try:
                 pil_image = Image.open(io.BytesIO(image_bytes))
@@ -61,10 +73,9 @@ class LLMProvider:
                     contents=[pil_image, prompt]
                 )
                 if response.text:
-                    return response.text
+                    return response.text, False
                 raise ValueError("Gemini returned empty response text")
             except Exception as e:
-                # Detect rate limit 429 or ResourceExhausted
                 err_str = str(e).lower()
                 is_rate_limit = (
                     "429" in err_str
@@ -73,12 +84,12 @@ class LLMProvider:
                     or "rate limit" in err_str
                 )
                 if not is_rate_limit:
-                    # If not a rate limit error, propagate or try fallback if Gemini key was missing/invalid
                     logger.warning(f"Gemini vision call failed: {e}. Attempting OpenRouter fallback.")
                 else:
                     logger.warning(f"Gemini vision rate limit hit (429): {e}. Falling back to OpenRouter ({OPENROUTER_VISION_FALLBACK}).")
 
         # Fallback to OpenRouter Free Vision
+        used_fallback = True
         if not self._openrouter_client:
             raise ValueError("OpenRouter client not initialized. Cannot perform vision fallback.")
 
@@ -99,7 +110,7 @@ class LLMProvider:
             temperature=0.1,
             max_tokens=2048
         )
-        return resp.choices[0].message.content or ""
+        return resp.choices[0].message.content or "", used_fallback
 
     def generate_text(
         self,
@@ -107,7 +118,19 @@ class LLMProvider:
         system_prompt: Optional[str] = None,
         force_fallback: bool = False
     ) -> str:
-        """Executes a text request using primary Groq, falling back to OpenRouter on 429."""
+        text, _ = self.generate_text_with_status(prompt, system_prompt, force_fallback)
+        return text
+
+    def generate_text_with_status(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        force_fallback: bool = False
+    ) -> tuple[str, bool]:
+        """Executes a text request using primary Groq, falling back to OpenRouter on 429.
+        Returns: (response_text, used_fallback_boolean)
+        """
+        used_fallback = False
         if not force_fallback and self._groq_client:
             try:
                 messages = []
@@ -121,7 +144,7 @@ class LLMProvider:
                     temperature=0.1,
                     max_tokens=2048
                 )
-                return response.choices[0].message.content or ""
+                return response.choices[0].message.content or "", False
             except Exception as e:
                 err_str = str(e).lower()
                 is_rate_limit = "429" in err_str or "rate limit" in err_str or "quota" in err_str
@@ -131,6 +154,7 @@ class LLMProvider:
                     logger.warning(f"Groq rate limit hit (429): {e}. Falling back to OpenRouter ({OPENROUTER_TEXT_FALLBACK}).")
 
         # Fallback to OpenRouter Free Text
+        used_fallback = True
         if not self._openrouter_client:
             raise ValueError("OpenRouter client not initialized. Cannot perform text fallback.")
 
@@ -145,7 +169,8 @@ class LLMProvider:
             temperature=0.1,
             max_tokens=2048
         )
-        return resp.choices[0].message.content or ""
+        return resp.choices[0].message.content or "", used_fallback
+
 
 
 _default_provider: Optional[LLMProvider] = None

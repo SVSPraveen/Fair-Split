@@ -7,8 +7,10 @@ from backend.models import (
     PersonShare,
     PersonItem,
     ReconciliationDetail,
-    SettleUpTransaction
+    SettleUpTransaction,
+    ConfidenceDetail
 )
+from backend.cross_check import cross_check_extraction_and_parsing
 
 
 def _match_item_assignment(item_name: str, assignments: list) -> Optional[Any]:
@@ -34,6 +36,7 @@ def compute_split(
     4. Bill-level discount allocated proportional to each person's subtotal.
     5. Round to nearest rupee; leftover paisa diff absorbed by payer if present.
     6. Edge cases: missing payer, unmatched mentions, unclear references forwarded to flags.
+    7. Anti-hallucination cross-check and confidence scoring.
     """
     flags: List[str] = []
     assumptions: List[str] = []
@@ -48,7 +51,13 @@ def compute_split(
     if description.parsing_assumptions:
         assumptions.extend(description.parsing_assumptions)
 
-    # 2. Resolve distinct group members
+    # 2. Run bidirectional cross-check between receipt items and description assignments
+    cross_check_flags = cross_check_extraction_and_parsing(receipt, description)
+    for ccf in cross_check_flags:
+        if ccf not in flags:
+            flags.append(ccf)
+
+    # 3. Resolve distinct group members
     people: List[str] = list(description.people)
     if not people:
         # Fallback: extract unique names from item_assignments
@@ -58,7 +67,7 @@ def compute_split(
         people = list(inferred_names) if inferred_names else ["Guest"]
         assumptions.append(f"People list inferred from item assignments: {people}")
 
-    # 3. Allocate line items to consumers
+    # 4. Allocate line items to consumers
     person_items_map: Dict[str, List[PersonItem]] = {p: [] for p in people}
     person_subtotals: Dict[str, float] = {p: 0.0 for p in people}
 
@@ -77,7 +86,7 @@ def compute_split(
         else:
             # Not explicitly assigned -> fallback to shared among all known people
             consumers = people
-            flags.append(f"Item '{item.name}' was not explicitly assigned; defaulted to shared by all {len(people)} people.")
+            # Already flagged by cross_check_extraction_and_parsing if missing
 
         num_consumers = len(consumers)
         is_shared = num_consumers > 1
@@ -93,7 +102,7 @@ def compute_split(
             )
             person_subtotals[c] += split_amount
 
-    # 4. Proportional Tax, Service Charge, Discount, and Round-Off Allocation
+    # 5. Proportional Tax, Service Charge, Discount, and Round-Off Allocation
     grand_subtotal = sum(person_subtotals.values())
     if grand_subtotal <= 0:
         grand_subtotal = receipt.subtotal or receipt.grand_total or 1.0
@@ -138,7 +147,7 @@ def compute_split(
             "total": rounded_total
         })
 
-    # 5. Payer Remainder Absorption (Payer-Only)
+    # 6. Payer Remainder Absorption (Payer-Only)
     sum_of_rounded_totals = sum(p["total"] for p in per_person_data)
     diff = round(receipt.grand_total - sum_of_rounded_totals, 2)
 
@@ -165,7 +174,7 @@ def compute_split(
                 f"sum of person totals is ₹{sum_of_rounded_totals:.2f} vs bill grand total ₹{receipt.grand_total:.2f}."
             )
 
-    # 6. Final PersonShare Construction & Reconciliation
+    # 7. Final PersonShare Construction & Reconciliation
     per_person_final: List[PersonShare] = []
     for p in per_person_data:
         per_person_final.append(
@@ -194,7 +203,7 @@ def compute_split(
         matches_bill=matches_bill
     )
 
-    # 7. Settle-Up Calculations
+    # 8. Settle-Up Calculations
     settle_up: List[SettleUpTransaction] = []
     resolved_paid_by: Optional[str] = None
 
@@ -217,6 +226,35 @@ def compute_split(
     else:
         flags.append("Payer not specified in description. Settle-up transactions cannot be computed.")
 
+    # 9. Anti-Hallucination Confidence Assessment
+    confidence_reasons: List[str] = []
+    
+    # Include all flags
+    if flags:
+        confidence_reasons.extend(flags)
+        
+    # Check fallback providers used
+    if getattr(receipt, "used_fallback", False):
+        confidence_reasons.append("Vision OCR extraction used fallback model instead of primary provider.")
+    if getattr(description, "used_fallback", False):
+        confidence_reasons.append("Description parsing used fallback text model instead of primary provider.")
+        
+    # Check unmatched mentions or unclear references
+    for um in description.unmatched_mentions:
+        if f"Unmatched mention from description: '{um}'" not in confidence_reasons:
+            confidence_reasons.append(f"Unmatched mention from description: '{um}'")
+    for ur in description.unclear_references:
+        if f"Unclear reference from description: '{ur}'" not in confidence_reasons:
+            confidence_reasons.append(f"Unclear reference from description: '{ur}'")
+
+    # Deduplicate reasons while preserving order
+    deduped_reasons = list(dict.fromkeys(confidence_reasons))
+
+    if not deduped_reasons:
+        confidence = ConfidenceDetail(level="high", reasons=[])
+    else:
+        confidence = ConfidenceDetail(level="needs_review", reasons=deduped_reasons)
+
     return SplitResult(
         per_person=per_person_final,
         grand_total=receipt.grand_total,
@@ -224,5 +262,7 @@ def compute_split(
         paid_by=resolved_paid_by,
         settle_up=settle_up,
         assumptions=assumptions,
-        flags=flags
+        flags=flags,
+        confidence=confidence
     )
+

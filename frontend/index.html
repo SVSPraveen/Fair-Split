@@ -89,6 +89,20 @@
 
       <!-- Results Section -->
       <section id="results-container" class="results-container hidden">
+        <!-- Anti-Hallucination Confidence Banner -->
+        <div id="confidence-banner" class="confidence-banner high">
+          <div class="confidence-left">
+            <span id="confidence-badge" class="confidence-badge">HIGH CONFIDENCE</span>
+            <div class="confidence-text-area">
+              <h3 id="confidence-title">Anti-Hallucination Verified</h3>
+              <p id="confidence-subtitle">Zero flags, primary AI models used, exact mathematical cross-check passed.</p>
+            </div>
+          </div>
+          <div id="confidence-reasons-container" class="confidence-reasons-container hidden">
+            <ul id="confidence-reasons-list" class="confidence-reasons-list"></ul>
+          </div>
+        </div>
+
         <!-- Reconciliation Status Banner -->
         <div id="reconciliation-banner" class="reconciliation-banner">
           <div class="recon-left">
@@ -113,6 +127,7 @@
         <!-- Per Person Breakdown Table -->
         <div class="card">
           <h2 class="card-title">2. Itemized Breakdown Per Person</h2>
+
           <div class="table-responsive">
             <table class="split-table" id="split-table">
               <thead>

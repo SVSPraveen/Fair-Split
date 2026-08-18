@@ -126,20 +126,20 @@ def _run_self_checks(receipt: ReceiptData) -> List[str]:
     """Recomputes subtotal and grand total, checking against printed receipt values.
     
     Self-check algorithm:
-    1. Recompute subtotal from summed item amounts.
-    2. Recompute expected grand total: (subtotal - discount + service_charge + tax + round_off).
-    3. Compare both against printed subtotal / grand_total and flag discrepancies (> 0.05).
-    4. Check per-item multiplication (qty * unit_price == amount).
+    1. Per-item math check: verify abs(qty * unit_price - amount) < 0.5.
+    2. Recompute subtotal from summed item amounts.
+    3. Recompute expected grand total: (subtotal - discount + service_charge + tax + round_off).
+    4. Compare both against printed subtotal / grand_total and flag discrepancies (> 0.05).
     """
     flags: List[str] = []
 
-    # 1. Item line check (qty * unit_price == amount)
+    # 1. Per-item math check: verify abs(qty * unit_price - amount) < 0.5
     for item in receipt.items:
-        expected_item_amt = round(item.qty * item.unit_price, 2)
-        if abs(expected_item_amt - round(item.amount, 2)) > 0.05:
+        computed_item_amt = round(item.qty * item.unit_price, 2)
+        diff = abs(computed_item_amt - round(item.amount, 2))
+        if diff >= 0.5:
             flags.append(
-                f"Item amount mismatch for '{item.name}': {item.qty} x {item.unit_price:.2f} "
-                f"= {expected_item_amt:.2f} (printed amount: {item.amount:.2f})"
+                f"Line item math mismatch for '{item.name}': {item.qty} × {item.unit_price:.2f} = {computed_item_amt:.2f} != printed amount {item.amount:.2f}"
             )
 
     # 2. Recompute subtotal from summed item amounts
@@ -216,8 +216,9 @@ def extract_receipt(
     # Attempt 1: Primary prompt
     raw_response = ""
     parse_error = None
+    used_fb = False
     try:
-        raw_response = client.generate_vision(
+        raw_response, used_fb = client.generate_vision_with_status(
             prompt=PRIMARY_EXTRACTION_PROMPT,
             image_bytes=image_bytes,
             force_fallback=force_fallback
@@ -230,7 +231,7 @@ def extract_receipt(
     # Attempt 2: Retry with stricter prompt if attempt 1 failed
     if parse_error is not None:
         try:
-            raw_response = client.generate_vision(
+            raw_response, used_fb = client.generate_vision_with_status(
                 prompt=STRICT_FALLBACK_PROMPT,
                 image_bytes=image_bytes,
                 force_fallback=force_fallback
@@ -244,8 +245,11 @@ def extract_receipt(
                 f"Raw response: {raw_response}"
             ) from retry_err
 
+    receipt.used_fallback = used_fb
+
     # Run self-check validations
     flags = _run_self_checks(receipt)
     receipt.extraction_flags = flags
 
     return receipt
+

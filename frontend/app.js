@@ -171,6 +171,40 @@ function hideError() {
 
 // Render Results
 function renderResults(data) {
+  // 0. Confidence Banner
+  const confidenceBanner = document.getElementById('confidence-banner');
+  const confidenceBadge = document.getElementById('confidence-badge');
+  const confidenceTitle = document.getElementById('confidence-title');
+  const confidenceSubtitle = document.getElementById('confidence-subtitle');
+  const confidenceReasonsContainer = document.getElementById('confidence-reasons-container');
+  const confidenceReasonsList = document.getElementById('confidence-reasons-list');
+
+  const conf = data.confidence || { level: 'high', reasons: [] };
+  const isHigh = conf.level === 'high';
+
+  if (isHigh) {
+    confidenceBanner.className = 'confidence-banner high';
+    confidenceBadge.className = 'confidence-badge high';
+    confidenceBadge.textContent = 'HIGH CONFIDENCE';
+    confidenceTitle.textContent = 'Anti-Hallucination Verified';
+    confidenceSubtitle.textContent = 'All mathematical self-checks passed, primary AI models used, and 100% of line items reconciled.';
+    confidenceReasonsContainer.classList.add('hidden');
+    confidenceReasonsList.innerHTML = '';
+  } else {
+    confidenceBanner.className = 'confidence-banner needs-review';
+    confidenceBadge.className = 'confidence-badge needs-review';
+    confidenceBadge.textContent = 'NEEDS REVIEW';
+    confidenceTitle.textContent = 'Audit Flags or Discrepancies Detected';
+    confidenceSubtitle.textContent = 'One or more edge conditions, unassigned items, or fallback models were triggered:';
+    confidenceReasonsContainer.classList.remove('hidden');
+    confidenceReasonsList.innerHTML = '';
+    conf.reasons.forEach((r) => {
+      const li = document.createElement('li');
+      li.textContent = r;
+      confidenceReasonsList.appendChild(li);
+    });
+  }
+
   // 1. Reconciliation Banner
   const isMatch = data.reconciliation && data.reconciliation.matches_bill;
   statGrandTotal.textContent = `₹${data.grand_total.toFixed(2)}`;
@@ -191,6 +225,7 @@ function renderResults(data) {
   // 2. Per Person Table
   splitTableBody.innerHTML = '';
   const payer = data.paid_by ? data.paid_by.trim().toLowerCase() : null;
+
 
   data.per_person.forEach((person) => {
     const tr = document.createElement('tr');

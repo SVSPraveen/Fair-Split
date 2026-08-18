@@ -145,15 +145,18 @@ def parse_description(
 
     raw_response = ""
     parse_error = None
+    used_fb = False
 
     # Attempt 1: Primary prompt
     try:
-        raw_response = client.generate_text(
+        raw_response, used_fb = client.generate_text_with_status(
             prompt=prompt,
             force_fallback=force_fallback
         )
         parsed_dict = _clean_and_parse_json(raw_response)
-        return DescriptionData.model_validate(parsed_dict)
+        desc_obj = DescriptionData.model_validate(parsed_dict)
+        desc_obj.used_fallback = used_fb
+        return desc_obj
     except (json.JSONDecodeError, ValidationError, Exception) as e:
         parse_error = e
 
@@ -163,15 +166,18 @@ def parse_description(
         description=description.strip()
     )
     try:
-        raw_response = client.generate_text(
+        raw_response, used_fb = client.generate_text_with_status(
             prompt=retry_prompt,
             force_fallback=force_fallback
         )
         parsed_dict = _clean_and_parse_json(raw_response)
-        return DescriptionData.model_validate(parsed_dict)
+        desc_obj = DescriptionData.model_validate(parsed_dict)
+        desc_obj.used_fallback = used_fb
+        return desc_obj
     except Exception as retry_err:
         raise ValueError(
             f"Description parsing failed after retry. "
             f"Initial error: {parse_error}. Retry error: {retry_err}. "
             f"Raw response: {raw_response}"
         ) from retry_err
+

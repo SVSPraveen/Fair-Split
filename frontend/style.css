@@ -312,6 +312,83 @@ body {
   gap: 20px;
 }
 
+/* Anti-Hallucination Confidence Banner */
+.confidence-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  border: 1px solid var(--border-color);
+  background-color: #FFFFFF;
+}
+
+.confidence-banner.high {
+  background-color: #F0FDF4;
+  border-color: #BBF7D0;
+}
+
+.confidence-banner.needs-review {
+  background-color: #FFFBEB;
+  border-color: #FDE68A;
+}
+
+.confidence-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.confidence-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.confidence-badge.high {
+  background-color: #DCFCE7;
+  color: #15803D;
+  border: 1px solid #86EFAC;
+}
+
+.confidence-badge.needs-review {
+  background-color: #FEF3C7;
+  color: #B45309;
+  border: 1px solid #FCD34D;
+}
+
+.confidence-text-area h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.confidence-text-area p {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.confidence-reasons-container {
+  background-color: rgba(255, 255, 255, 0.7);
+  border: 1px dashed #F59E0B;
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+}
+
+.confidence-reasons-list {
+  list-style: disc;
+  padding-left: 18px;
+  font-size: 12.5px;
+  color: #92400E;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 /* Reconciliation Banner */
 .reconciliation-banner {
   display: flex;
@@ -322,6 +399,7 @@ body {
   border-radius: var(--radius-lg);
   padding: 16px 20px;
 }
+
 
 .reconciliation-banner.warning {
   background-color: var(--warning-bg);
