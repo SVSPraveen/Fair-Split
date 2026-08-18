@@ -99,69 +99,30 @@ class LLMProvider:
         force_fallback: bool = False,
         timeout_seconds: float = VISION_TIMEOUT_SECONDS
     ) -> Tuple[str, bool, Optional[str]]:
-        """Executes a vision request using primary Gemini Flash, falling back to Groq Vision or OpenRouter.
+        """Executes a vision request using optimal preference order:
+        1. Primary: Groq Vision (qwen/qwen3.6-27b with token-optimized image)
+        2. Tier 2: Gemini 3.7 Flash
+        3. Tier 3: OpenRouter Vision (gemma-4-26b-a4b-it:free)
+
         Returns: (response_text, used_fallback_boolean, fallback_reason)
         """
-        # Optimize image to keep token usage small and prevent TPM rate limits
+        # Optimize image to keep token usage small (~1000 tokens) and prevent TPM limits
         optimized_bytes = _optimize_image_for_ocr(image_bytes, max_dimension=800)
+        base64_image = base64.b64encode(optimized_bytes).decode("utf-8")
+        data_uri = f"data:image/jpeg;base64,{base64_image}"
 
         used_fallback = False
         fallback_reason = None
 
-        # Try Primary Vision: Gemini 3.7 Flash
-        if not force_fallback and self._gemini_client:
-            try:
-                img = Image.open(io.BytesIO(optimized_bytes))
-                response = self._gemini_client.models.generate_content(
-                    model=GEMINI_VISION_PRIMARY,
-                    contents=[img, prompt],
-                    config=types.GenerateContentConfig(
-                        temperature=0.1,
-                        max_output_tokens=2048,
-                        http_options=types.HttpOptions(timeout=int(timeout_seconds * 1000))
-                    )
-                )
-                if response.text:
-                    return response.text, False, None
-                raise ValueError("Gemini returned empty response text")
-            except Exception as e:
-                err_str = str(e).lower()
-                is_timeout = (
-                    isinstance(e, (httpx.TimeoutException, TimeoutError))
-                    or "timeout" in err_str
-                    or "timed out" in err_str
-                    or "deadline" in err_str
-                )
-                is_rate_limit = (
-                    "429" in err_str
-                    or "resourceexhausted" in err_str
-                    or "quota" in err_str
-                    or "rate limit" in err_str
-                )
-                if is_timeout:
-                    fallback_reason = "timeout"
-                    logger.warning(f"Gemini vision timed out after {int(timeout_seconds)}s, falling back.")
-                elif is_rate_limit:
-                    fallback_reason = "rate_limit_429"
-                    logger.warning(f"Gemini vision returned 429, falling back to Groq / OpenRouter.")
-                else:
-                    fallback_reason = "error"
-                    logger.warning(f"Gemini vision call failed ({e}). Attempting fallback.")
-
-        # Fallback Vision: Try Groq Vision first (qwen/qwen3.6-27b), then OpenRouter
-        used_fallback = True
-        if fallback_reason is None:
-            fallback_reason = "forced_fallback" if force_fallback else "primary_unavailable"
-
-        base64_image = base64.b64encode(optimized_bytes).decode("utf-8")
-        data_uri = f"data:image/jpeg;base64,{base64_image}"
-
-        # 1. Try Groq Vision (qwen/qwen3.6-27b)
-        if self._groq_client:
+        # -------------------------------------------------------------
+        # Tier 1 (Primary): Groq Vision (qwen/qwen3.6-27b)
+        # -------------------------------------------------------------
+        if not force_fallback and self._groq_client:
             try:
                 resp = self._groq_client.chat.completions.create(
                     model="qwen/qwen3.6-27b",
                     messages=[
+                        {"role": "system", "content": "You are a specialized receipt OCR JSON engine. Output ONLY valid JSON conforming to the schema. Do not output preamble, thinking tags, or markdown commentary."},
                         {
                             "role": "user",
                             "content": [
@@ -170,22 +131,65 @@ class LLMProvider:
                             ]
                         }
                     ],
-                    temperature=0.1,
-                    max_tokens=2048,
+                    temperature=0.0,
+                    max_tokens=4096,
                     timeout=timeout_seconds
                 )
                 if resp.choices and resp.choices[0].message.content:
-                    return resp.choices[0].message.content, used_fallback, fallback_reason
-            except (httpx.TimeoutException, groq.APITimeoutError, TimeoutError) as groq_to_err:
-                logger.warning(f"Groq vision fallback timed out: {groq_to_err}")
-                if not self._openrouter_client:
-                    raise TimeoutError(f"Vision extraction timed out after {int(timeout_seconds)}s on Groq (qwen/qwen3.6-27b).") from groq_to_err
-            except Exception as groq_err:
-                logger.warning(f"Groq vision call failed ({groq_err}), falling back to OpenRouter.")
+                    return resp.choices[0].message.content, False, None
+                raise ValueError("Groq vision returned empty response")
+            except Exception as e:
+                err_str = str(e).lower()
+                is_timeout = (
+                    isinstance(e, (httpx.TimeoutException, groq.APITimeoutError, TimeoutError))
+                    or "timeout" in err_str
+                    or "timed out" in err_str
+                )
+                is_rate_limit = "429" in err_str or "quota" in err_str or "rate limit" in err_str
+                if is_timeout:
+                    fallback_reason = "timeout"
+                    logger.warning(f"Groq vision timed out after {int(timeout_seconds)}s, falling back to Gemini.")
+                elif is_rate_limit:
+                    fallback_reason = "rate_limit_429"
+                    logger.warning(f"Groq vision returned 429, falling back to Gemini.")
+                else:
+                    fallback_reason = "error"
+                    logger.warning(f"Groq vision call failed ({e}). Falling back to Gemini.")
 
-        # 2. Try OpenRouter Vision
+        # -------------------------------------------------------------
+        # Tier 2 (Secondary): Gemini 3.7 Flash
+        # -------------------------------------------------------------
+        used_fallback = True
+        if fallback_reason is None:
+            fallback_reason = "forced_fallback" if force_fallback else "primary_unavailable"
+
+        if self._gemini_client:
+            try:
+                img = Image.open(io.BytesIO(optimized_bytes))
+                response = self._gemini_client.models.generate_content(
+                    model=GEMINI_VISION_PRIMARY,
+                    contents=[img, prompt],
+                    config=types.GenerateContentConfig(
+                        temperature=0.1,
+                        max_output_tokens=4096,
+                        http_options=types.HttpOptions(timeout=int(timeout_seconds * 1000))
+                    )
+                )
+                if response.text:
+                    return response.text, used_fallback, fallback_reason
+                raise ValueError("Gemini returned empty response text")
+            except (httpx.TimeoutException, TimeoutError) as gemini_to_err:
+                logger.warning(f"Gemini vision fallback timed out: {gemini_to_err}")
+                if not self._openrouter_client:
+                    raise TimeoutError(f"Vision extraction timed out after {int(timeout_seconds)}s on Gemini ({GEMINI_VISION_PRIMARY}).") from gemini_to_err
+            except Exception as gemini_err:
+                logger.warning(f"Gemini vision fallback failed ({gemini_err}), falling back to OpenRouter.")
+
+        # -------------------------------------------------------------
+        # Tier 3 (Tertiary): OpenRouter Vision (google/gemma-4-26b-a4b-it:free)
+        # -------------------------------------------------------------
         if not self._openrouter_client:
-            raise ValueError("No fallback vision client available (both Groq and OpenRouter unavailable).")
+            raise ValueError("No fallback vision client available (all providers exhausted).")
 
         try:
             resp = self._openrouter_client.chat.completions.create(
@@ -200,7 +204,7 @@ class LLMProvider:
                     }
                 ],
                 temperature=0.1,
-                max_tokens=2048,
+                max_tokens=4096,
                 timeout=timeout_seconds
             )
             return resp.choices[0].message.content or "", used_fallback, fallback_reason
@@ -244,7 +248,7 @@ class LLMProvider:
                     model=GROQ_TEXT_PRIMARY,
                     messages=messages,
                     temperature=0.1,
-                    max_tokens=2048,
+                    max_tokens=4096,
                     timeout=timeout_seconds
                 )
                 return response.choices[0].message.content or "", False, None
@@ -280,7 +284,7 @@ class LLMProvider:
                     contents=full_prompt,
                     config=types.GenerateContentConfig(
                         temperature=0.1,
-                        max_output_tokens=2048,
+                        max_output_tokens=4096,
                         http_options=types.HttpOptions(timeout=int(timeout_seconds * 1000))
                     )
                 )
@@ -307,7 +311,7 @@ class LLMProvider:
                 model=OPENROUTER_TEXT_FALLBACK,
                 messages=messages,
                 temperature=0.1,
-                max_tokens=2048,
+                max_tokens=4096,
                 timeout=timeout_seconds
             )
             return resp.choices[0].message.content or "", used_fallback, fallback_reason
