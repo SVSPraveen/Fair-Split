@@ -29,8 +29,12 @@ VISION_TIMEOUT_SECONDS: float = float(os.getenv("VISION_TIMEOUT_SECONDS", "15.0"
 TEXT_TIMEOUT_SECONDS: float = float(os.getenv("TEXT_TIMEOUT_SECONDS", "10.0"))
 
 
-def _optimize_image_for_ocr(image_bytes: bytes, max_dimension: int = 800) -> bytes:
-    """Resizes and compresses images to reduce token counts (~1000 tokens) and prevent TPM limits."""
+import re
+import time
+
+
+def _optimize_image_for_ocr(image_bytes: bytes, max_dimension: int = 640) -> bytes:
+    """Resizes and compresses images to reduce token counts (<500 tokens) and prevent TPM limits."""
     try:
         img = Image.open(io.BytesIO(image_bytes))
         if img.mode in ("RGBA", "P"):
@@ -41,7 +45,7 @@ def _optimize_image_for_ocr(image_bytes: bytes, max_dimension: int = 800) -> byt
             new_size = (int(w * scale), int(h * scale))
             img = img.resize(new_size, Image.Resampling.LANCZOS)
         out = io.BytesIO()
-        img.save(out, format="JPEG", quality=85, optimize=True)
+        img.save(out, format="JPEG", quality=75, optimize=True)
         return out.getvalue()
     except Exception:
         return image_bytes
@@ -117,44 +121,57 @@ class LLMProvider:
         # -------------------------------------------------------------
         # Tier 1 (Primary): Groq Vision (qwen/qwen3.6-27b)
         # -------------------------------------------------------------
+        # -------------------------------------------------------------
+        # Tier 1 (Primary): Groq Vision (qwen/qwen3.6-27b)
+        # -------------------------------------------------------------
         if not force_fallback and self._groq_client:
-            try:
-                resp = self._groq_client.chat.completions.create(
-                    model="qwen/qwen3.6-27b",
-                    messages=[
-                        {"role": "system", "content": "You are a specialized receipt OCR JSON engine. Output ONLY valid JSON conforming to the schema. Do not output preamble, thinking tags, or markdown commentary."},
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": prompt},
-                                {"type": "image_url", "image_url": {"url": data_uri}}
-                            ]
-                        }
-                    ],
-                    temperature=0.0,
-                    max_tokens=4096,
-                    timeout=timeout_seconds
-                )
-                if resp.choices and resp.choices[0].message.content:
-                    return resp.choices[0].message.content, False, None
-                raise ValueError("Groq vision returned empty response")
-            except Exception as e:
-                err_str = str(e).lower()
-                is_timeout = (
-                    isinstance(e, (httpx.TimeoutException, groq.APITimeoutError, TimeoutError))
-                    or "timeout" in err_str
-                    or "timed out" in err_str
-                )
-                is_rate_limit = "429" in err_str or "quota" in err_str or "rate limit" in err_str
-                if is_timeout:
-                    fallback_reason = "timeout"
-                    logger.warning(f"Groq vision timed out after {int(timeout_seconds)}s, falling back to Gemini.")
-                elif is_rate_limit:
-                    fallback_reason = "rate_limit_429"
-                    logger.warning(f"Groq vision returned 429, falling back to Gemini.")
-                else:
-                    fallback_reason = "error"
-                    logger.warning(f"Groq vision call failed ({e}). Falling back to Gemini.")
+            max_retries = 2
+            for attempt in range(max_retries + 1):
+                try:
+                    resp = self._groq_client.chat.completions.create(
+                        model="qwen/qwen3.6-27b",
+                        messages=[
+                            {"role": "system", "content": "You are a specialized receipt OCR JSON engine. Output ONLY valid JSON conforming to the schema. Do not output preamble, thinking tags, or markdown commentary."},
+                            {
+                                "role": "user",
+                                "content": [
+                                    {"type": "text", "text": prompt},
+                                    {"type": "image_url", "image_url": {"url": data_uri}}
+                                ]
+                            }
+                        ],
+                        temperature=0.0,
+                        max_tokens=4096,
+                        timeout=timeout_seconds
+                    )
+                    if resp.choices and resp.choices[0].message.content:
+                        return resp.choices[0].message.content, False, None
+                    raise ValueError("Groq vision returned empty response")
+                except Exception as e:
+                    err_str = str(e).lower()
+                    is_rate_limit = "429" in err_str or "quota" in err_str or "rate limit" in err_str
+                    if is_rate_limit and attempt < max_retries:
+                        match = re.search(r"try again in ([\d\.]+)s", err_str)
+                        delay = float(match.group(1)) + 0.5 if match else (2.0 * (attempt + 1))
+                        logger.warning(f"Groq vision 429 on attempt {attempt+1}. Retrying in {delay:.2f}s...")
+                        time.sleep(delay)
+                        continue
+
+                    is_timeout = (
+                        isinstance(e, (httpx.TimeoutException, groq.APITimeoutError, TimeoutError))
+                        or "timeout" in err_str
+                        or "timed out" in err_str
+                    )
+                    if is_timeout:
+                        fallback_reason = "timeout"
+                        logger.warning(f"Groq vision timed out after {int(timeout_seconds)}s, falling back to Gemini.")
+                    elif is_rate_limit:
+                        fallback_reason = "rate_limit_429"
+                        logger.warning(f"Groq vision returned 429, falling back to Gemini.")
+                    else:
+                        fallback_reason = "error"
+                        logger.warning(f"Groq vision call failed ({e}). Falling back to Gemini.")
+                    break
 
         # -------------------------------------------------------------
         # Tier 2 (Secondary): Gemini 3.7 Flash
@@ -238,37 +255,47 @@ class LLMProvider:
         fallback_reason = None
 
         if not force_fallback and self._groq_client:
-            try:
-                messages = []
-                if system_prompt:
-                    messages.append({"role": "system", "content": system_prompt})
-                messages.append({"role": "user", "content": prompt})
+            max_retries = 2
+            for attempt in range(max_retries + 1):
+                try:
+                    messages = []
+                    if system_prompt:
+                        messages.append({"role": "system", "content": system_prompt})
+                    messages.append({"role": "user", "content": prompt})
 
-                response = self._groq_client.chat.completions.create(
-                    model=GROQ_TEXT_PRIMARY,
-                    messages=messages,
-                    temperature=0.1,
-                    max_tokens=4096,
-                    timeout=timeout_seconds
-                )
-                return response.choices[0].message.content or "", False, None
-            except Exception as e:
-                err_str = str(e).lower()
-                is_timeout = (
-                    isinstance(e, (httpx.TimeoutException, groq.APITimeoutError, TimeoutError))
-                    or "timeout" in err_str
-                    or "timed out" in err_str
-                )
-                is_rate_limit = "429" in err_str or "rate limit" in err_str or "quota" in err_str
-                if is_timeout:
-                    fallback_reason = "timeout"
-                    logger.warning(f"Groq text timed out after {int(timeout_seconds)}s, falling back to OpenRouter.")
-                elif is_rate_limit:
-                    fallback_reason = "rate_limit_429"
-                    logger.warning(f"Groq text returned 429, falling back to OpenRouter.")
-                else:
-                    fallback_reason = "error"
-                    logger.warning(f"Groq text call failed ({e}). Attempting fallback.")
+                    response = self._groq_client.chat.completions.create(
+                        model=GROQ_TEXT_PRIMARY,
+                        messages=messages,
+                        temperature=0.1,
+                        max_tokens=4096,
+                        timeout=timeout_seconds
+                    )
+                    return response.choices[0].message.content or "", False, None
+                except Exception as e:
+                    err_str = str(e).lower()
+                    is_rate_limit = "429" in err_str or "rate limit" in err_str or "quota" in err_str
+                    if is_rate_limit and attempt < max_retries:
+                        match = re.search(r"try again in ([\d\.]+)s", err_str)
+                        delay = float(match.group(1)) + 0.5 if match else (2.0 * (attempt + 1))
+                        logger.warning(f"Groq text 429 on attempt {attempt+1}. Retrying in {delay:.2f}s...")
+                        time.sleep(delay)
+                        continue
+
+                    is_timeout = (
+                        isinstance(e, (httpx.TimeoutException, groq.APITimeoutError, TimeoutError))
+                        or "timeout" in err_str
+                        or "timed out" in err_str
+                    )
+                    if is_timeout:
+                        fallback_reason = "timeout"
+                        logger.warning(f"Groq text timed out after {int(timeout_seconds)}s, falling back to OpenRouter.")
+                    elif is_rate_limit:
+                        fallback_reason = "rate_limit_429"
+                        logger.warning(f"Groq text returned 429, falling back to OpenRouter.")
+                    else:
+                        fallback_reason = "error"
+                        logger.warning(f"Groq text call failed ({e}). Attempting fallback.")
+                    break
 
         # Fallback Text: Try Gemini first, then OpenRouter
         used_fallback = True
