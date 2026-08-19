@@ -39,15 +39,20 @@ Required JSON Schema:
 CRITICAL RULES:
 1. Return ONLY valid JSON wrapped in ```json ... ``` or directly as raw JSON.
 2. "people": List all distinct individuals identified in the group.
-3. "payer": Identify who paid. If NOT explicitly stated, set "payer" to null. NEVER invent or guess a payer.
+3. "payer": Identify who paid the whole bill at checkout. If NOT explicitly stated, set "payer" to null. NEVER invent or guess a payer.
 4. "item_assignments":
    - Map every mentioned item to the closest name in Known Receipt Items.
    - PARTIAL SHARING: If a subset of people shared an item (e.g. "Arjun and Meena shared the pizza", "2 of us had the beer"), list ONLY those individuals in consumed_by with is_shared: true. The split amount is divided equally among them automatically.
    - BLANKET STATEMENTS: If description says "everything else was common to all" or similar, assign ALL remaining unassigned known items to ALL people.
    - FUZZY MATCHING: Map abbreviated/informal mentions to the closest Known Receipt Item (e.g. "tikka" to "Chicken Tikka Starter", "naan" to "Garlic Naan"). Note the mapping in parsing_assumptions.
+   - TREAT / COVER / PAY FOR (CRITICAL): If person X says they will "pay for", "cover", "treat", or "sponsor" a specific item FOR person(s) Y and Z (who ate it), then the financial cost of that item falls on X — NOT on Y or Z. In this case, set consumed_by to [X] (the one covering the cost), NOT to the ones who ate it. Add a parsing_assumption like "Kavitha covers the lobster for Arjun, Meena, Priya — cost attributed to Kavitha". This correctly means Y and Z owe nothing for that dish, and X's total increases by the dish cost.
+   - Examples of TREAT rule:
+     * "Kavitha said she'll pay for the lobster for Arjun, Meena, and Priya" → consumed_by: ["Kavitha"]
+     * "Rohan is treating the table to dessert" → consumed_by: ["Rohan"]
+     * "Dev covered Anjali's biryani" → biryani consumed_by: ["Dev"] (Anjali owes nothing for it)
 5. "unmatched_mentions": Only add if there is genuinely NO plausible match in Known Receipt Items.
 6. "unclear_references": Ambiguous phrases that cannot be confidently assigned. Never silently drop them.
-7. "parsing_assumptions": Document every inference (e.g. "tikka mapped to Chicken Tikka Starter", "2 of us interpreted as Arjun and Meena").
+7. "parsing_assumptions": Document every inference (e.g. "tikka mapped to Chicken Tikka Starter", "2 of us interpreted as Arjun and Meena", "Kavitha covers lobster — cost attributed to Kavitha").
 """
 
 

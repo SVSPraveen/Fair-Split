@@ -216,9 +216,18 @@
           </div>
         </div>
 
-        <!-- Raw JSON Inspector -->
+        <!-- Money Flow Diagram (Mermaid) -->
+        <div class="card flow-card" id="flow-card">
+          <div class="card-header-row">
+            <h3 class="card-title" style="font-size:1rem;">💸 Money Flow Diagram</h3>
+            <span class="flow-subtitle">Who pays whom — at a glance</span>
+          </div>
+          <div id="mermaid-diagram" class="mermaid-container"></div>
+        </div>
+
+        <!-- Advanced: Raw JSON (for devs) -->
         <details class="card json-card" id="json-details">
-          <summary class="json-summary">View Raw API Payload (JSON)</summary>
+          <summary class="json-summary">🔧 Advanced: View Raw API Payload (JSON)</summary>
           <pre id="raw-json-viewer" class="raw-json-viewer"></pre>
         </details>
       </section>
@@ -229,6 +238,8 @@
     </footer>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({ startOnLoad: false, theme: 'base', themeVariables: { primaryColor: '#6366f1', primaryTextColor: '#fff', primaryBorderColor: '#4f46e5', lineColor: '#94a3b8', background: '#1e1e2e', mainBkg: '#2a2a3e', nodeBorder: '#4f46e5', fontSize: '15px' } });</script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -491,13 +491,80 @@ function renderResults(data) {
     flagsBlock.classList.add('hidden');
   }
 
-  // 5. Raw JSON Inspector
+  // 5. Money Flow Diagram (Mermaid)
+  renderMoneyFlowDiagram(data);
+
+  // 6. Raw JSON Inspector
   rawJsonViewer.textContent = JSON.stringify(data, null, 2);
 
   // Reveal results
   resultsContainer.classList.remove('hidden');
   resultsContainer.scrollIntoView({ behavior: 'smooth' });
 }
+
+/**
+ * Builds and renders a Mermaid flowchart showing the settle-up money flow.
+ * For each person who owes the payer, draws an arrow: Person -->|₹amount| Payer
+ * Color-codes: payer = green, debtors = purple, no-payer = neutral.
+ */
+async function renderMoneyFlowDiagram(data) {
+  const container = document.getElementById('mermaid-diagram');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const payer = data.paid_by;
+  const settleUp = data.settle_up || [];
+  const perPerson = data.per_person || [];
+
+  if (!payer || settleUp.length === 0) {
+    // No payer — show a simple breakdown of totals per person
+    let def = 'graph LR\n';
+    def += '  BILL(["🧾 Bill Total\\n₹' + data.grand_total.toFixed(0) + '"])\n';
+    perPerson.forEach((p, i) => {
+      const nodeId = 'P' + i;
+      const safe = p.name.replace(/[^a-zA-Z0-9]/g, '_');
+      def += `  ${nodeId}(["👤 ${p.name}\\n₹${p.total.toFixed(0)}"])\n`;
+      def += `  BILL --> ${nodeId}\n`;
+    });
+    def += '  style BILL fill:#4f46e5,color:#fff,stroke:#6366f1\n';
+    await _renderMermaid(container, def);
+    return;
+  }
+
+  // Build directed graph: each debtor → payer
+  let def = 'graph LR\n';
+
+  // Payer node
+  const payerSafe = payer.replace(/[^a-zA-Z0-9]/g, '_');
+  def += `  ${payerSafe}(["💳 ${payer}\\n Paid ₹${data.grand_total.toFixed(0)}"])\n`;
+  def += `  style ${payerSafe} fill:#059669,color:#fff,stroke:#047857\n`;
+
+  settleUp.forEach((t, i) => {
+    const fromSafe = (t.from || t.from_person || '').replace(/[^a-zA-Z0-9]/g, '_');
+    const fromName = t.from || t.from_person || 'Person';
+    const toSafe = (t.to || t.to_person || payer).replace(/[^a-zA-Z0-9]/g, '_');
+    const amt = typeof t.amount === 'number' ? t.amount : parseFloat(t.amount);
+
+    def += `  ${fromSafe}(["👤 ${fromName}"])\n`;
+    def += `  ${fromSafe} -->|"₹${amt.toFixed(0)}"| ${toSafe}\n`;
+    def += `  style ${fromSafe} fill:#4f46e5,color:#fff,stroke:#6366f1\n`;
+  });
+
+  await _renderMermaid(container, def);
+}
+
+async function _renderMermaid(container, definition) {
+  try {
+    const id = 'mermaid-' + Date.now();
+    const { svg } = await mermaid.render(id, definition);
+    container.innerHTML = svg;
+  } catch (e) {
+    container.innerHTML = '<span class="mermaid-placeholder">⚠️ Flow diagram unavailable for this result.</span>';
+    console.warn('Mermaid render failed:', e);
+  }
+}
+
+
 
 // Copy Utilities
 copyTableBtn.addEventListener('click', () => {
