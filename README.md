@@ -107,7 +107,7 @@ flowchart TD
 - **Wrong Receipt Guard**: Catching completely mismatched receipts (e.g. coffee bill for a steak dinner description) and gracefully rejecting the request with an actionable HTTP 422 in under 1.5s.
 
 ### 4. Deterministic Settlement & Exact Integer Reconciliation
-- **Largest Remainder Method (LRM)**: Pure Python integer allocation guaranteeing $\sum \text{person\_totals} \equiv \text{grand\_total}$ with zero paisa drift.
+- **Largest Remainder Method (LRM)**: Pure Python integer allocation guaranteeing $\sum P_i \equiv T$ (sum of person totals equals grand total) with zero paisa drift.
 - **Proportional Taxes & Discounts**: GST and service charges are strictly distributed proportional to each diner's pre-tax food subtotal.
 - **Direct-to-Payer Transfers**: Generates minimal reimbursement vectors (`from_person` $\to$ `to_person`).
 
