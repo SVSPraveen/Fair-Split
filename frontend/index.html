@@ -8,23 +8,32 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💸</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
+  <!-- Toast Notification -->
+  <div id="toast" class="toast hidden"></div>
+
   <div class="app-container">
+    <!-- Header -->
     <header class="app-header">
       <div class="header-top">
         <div class="logo-area">
-          <span class="logo-icon">🧾</span>
+          <div class="logo-badge">🧾</div>
           <div>
-            <h1>Fair-Split</h1>
-            <p class="subtitle">Receipt OCR &bull; Group Description Parsing &bull; Proportional Bill Settlement</p>
+            <div class="brand-row">
+              <h1>Fair-Split</h1>
+              <span class="version-tag">v2.0 • 100% Free Tier</span>
+            </div>
+            <p class="subtitle">Itemized OCR Vision &bull; Conversational NLP Parsing &bull; Exact Integer LRM Settlement</p>
           </div>
         </div>
         <!-- API URL Settings Toggle -->
         <div class="api-settings-area">
-          <button type="button" id="settings-toggle-btn" class="btn-secondary-sm" title="Configure API Endpoint">
-            ⚙️ <span id="api-status-badge" class="badge-online">API: Local</span>
+          <button type="button" id="settings-toggle-btn" class="btn-pill" title="Configure API Endpoint">
+            <span class="pulse-dot"></span>
+            <span id="api-status-badge" class="badge-online">API: Connected</span>
+            <span class="settings-cog">⚙️</span>
           </button>
         </div>
       </div>
@@ -41,21 +50,64 @@
       </div>
     </header>
 
+    <!-- How It Works Accordion -->
+    <details class="guide-accordion">
+      <summary class="guide-summary">
+        <span>💡 <strong>How Fair-Split Works & Advanced Rules Supported</strong></span>
+        <span class="guide-toggle-icon">▼</span>
+      </summary>
+      <div class="guide-content">
+        <div class="guide-grid">
+          <div class="guide-item">
+            <div class="guide-icon">🍕</div>
+            <div>
+              <h4>Partial & Fractional Sharing</h4>
+              <p>Type <em>"Arjun and Meena shared the pizza"</em> — the cost is divided equally among them.</p>
+            </div>
+          </div>
+          <div class="guide-item">
+            <div class="guide-icon">🎁</div>
+            <div>
+              <h4>The "TREAT / COVER" Rule</h4>
+              <p>Type <em>"Rohan covers Anjali's biryani"</em> — Rohan absorbs the cost; Anjali owes ₹0.</p>
+            </div>
+          </div>
+          <div class="guide-item">
+            <div class="guide-icon">🛠️</div>
+            <div>
+              <h4>Receipt Error Corrections</h4>
+              <p>Type <em>"We didn't eat the burger"</em> or <em>"Tax was ₹50"</em> — math adjusts automatically.</p>
+            </div>
+          </div>
+          <div class="guide-item">
+            <div class="guide-icon">⚖️</div>
+            <div>
+              <h4>Exact Integer Settlement (LRM)</h4>
+              <p>Proportional GST & discounts allocated with Largest Remainder Method (zero penny drift).</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </details>
+
     <main class="main-content">
       <!-- Input Section -->
       <section class="card input-card">
         <div class="card-header-row">
-          <h2 class="card-title">1. Bill & Group Input</h2>
+          <div>
+            <h2 class="card-title">1. Bill & Group Input</h2>
+            <p class="card-desc">Select a preset or upload your own receipt image</p>
+          </div>
           <!-- Preset Sample Chips -->
           <div class="sample-chips-wrapper">
-            <span class="sample-chips-label">Load Preset:</span>
-            <button type="button" class="sample-chip" data-sample="R1" title="Filter & Brew — Simple cafe thermal receipt">R1: Cafe ☕</button>
-            <button type="button" class="sample-chip active" data-sample="R2" title="Spice Affair — 9-item Indian restaurant, service charge + GST">R2: Spice Affair 🍛</button>
-            <button type="button" class="sample-chip" data-sample="R3" title="Dosa Plaza — South Indian QSR, 8 items, simple taxes">R3: Dosa Plaza 🥘</button>
-            <button type="button" class="sample-chip" data-sample="R4" title="Olive & Vine — Fine dining, 11 items, 12% member discount">R4: Fine Dining 🍷</button>
-            <button type="button" class="sample-chip" data-sample="R5" title="Sky High Lounge — Rooftop bar, dual-slab tax, loyalty discount">R5: Rooftop Bar 🍹</button>
-            <button type="button" class="sample-chip" data-sample="R6" title="The Urban Brewery — 10 items, multi-tax, 15% discount, 6 persons">R6: Brewery Feast 🔥</button>
-            <button type="button" class="sample-chip" data-sample="R7" title="The Grand Meridian Hotel — 19-item banquet, dual GST slabs, advance deposit">R7: Hotel Banquet 🏨💀</button>
+            <span class="sample-chips-label">Presets:</span>
+            <button type="button" class="sample-chip" data-sample="R1" title="Filter & Brew — Simple cafe thermal receipt">☕ R1: Cafe (2p)</button>
+            <button type="button" class="sample-chip active" data-sample="R2" title="Spice Affair — 9-item Indian restaurant, service charge + GST">🍛 R2: Spice Affair (4p)</button>
+            <button type="button" class="sample-chip" data-sample="R3" title="Dosa Plaza — South Indian QSR, 8 items, simple taxes">🥘 R3: Dosa Plaza (3p)</button>
+            <button type="button" class="sample-chip" data-sample="R4" title="Olive & Vine — Fine dining, 11 items, 12% member discount">🍷 R4: Fine Dining (5p)</button>
+            <button type="button" class="sample-chip" data-sample="R5" title="Sky High Lounge — Rooftop bar, dual-slab tax, loyalty discount">🍹 R5: Rooftop Bar (5p)</button>
+            <button type="button" class="sample-chip" data-sample="R6" title="The Urban Brewery — 10 items, multi-tax, 15% discount, 6 persons">🔥 R6: Brewery (6p)</button>
+            <button type="button" class="sample-chip" data-sample="R7" title="The Grand Meridian Hotel — 19-item banquet, dual GST slabs, advance deposit">🏨 R7: Banquet (8p)</button>
           </div>
         </div>
         
@@ -66,9 +118,9 @@
             <div class="upload-dropzone" id="dropzone">
               <input type="file" id="receipt-file" accept="image/*" class="file-input">
               <div class="dropzone-content" id="dropzone-prompt">
-                <span class="upload-icon">📁</span>
-                <p class="upload-text"><strong>Click to upload</strong> or drag and drop receipt image</p>
-                <p class="upload-hint">Supports PNG, JPEG, WEBP (Client-side base64 encoded)</p>
+                <div class="upload-icon-circle">📷</div>
+                <p class="upload-text"><strong>Click to upload</strong> or drag and drop receipt photo</p>
+                <p class="upload-hint">Supports PNG, JPEG, WEBP &bull; Max 20MB &bull; Auto-rotated & Optimized</p>
               </div>
               <div class="preview-area hidden" id="preview-area">
                 <img id="receipt-preview" alt="Receipt preview" class="receipt-thumbnail">
@@ -94,22 +146,37 @@
               placeholder="e.g. Four of us: Aman, Priya, Karan, Sara. The Gulab Jamun was shared just by Priya and Karan. Everything else was common to all four. Priya paid."
               required
             ></textarea>
-            <p class="form-hint">Describe party members, shared/individual item consumption, and the bill payer.</p>
+
+            <!-- Quick Helper Chips -->
+            <div class="quick-helpers">
+              <span class="helpers-label">Quick Phrases:</span>
+              <button type="button" class="helper-tag" data-append="Everything else was shared equally by all.">+ Shared equally</button>
+              <button type="button" class="helper-tag" data-append="Rohan is treating everyone to dessert.">+ Treat rule</button>
+              <button type="button" class="helper-tag" data-append="The burger was a restaurant mistake, exclude it.">+ Exclude item</button>
+              <button type="button" class="helper-tag" data-append="Kavya paid the bill.">+ Payer</button>
+            </div>
           </div>
 
           <button type="submit" id="submit-btn" class="btn-primary">
             <span class="btn-text-main">Calculate Fair Split</span>
-            <span class="btn-icon">&rarr;</span>
+            <span class="btn-icon">⚡</span>
           </button>
         </form>
       </section>
 
       <!-- Loading State -->
       <section id="loading-indicator" class="card loading-card hidden">
-        <div class="spinner"></div>
+        <div class="spinner-ring"></div>
         <div class="loading-text-area">
-          <h3 id="loading-heading">Processing Bill Split...</h3>
-          <p id="loading-subtext">Executing OCR vision extraction, description cross-referencing, and proportional settlement math.</p>
+          <h3 id="loading-heading">Analyzing Bill & Computing Fairness...</h3>
+          <div class="progress-steps">
+            <span class="step active">1. Vision OCR</span>
+            <span class="step-arrow">→</span>
+            <span class="step active">2. NLP Matching</span>
+            <span class="step-arrow">→</span>
+            <span class="step active">3. LRM Integer Math</span>
+          </div>
+          <p id="loading-subtext">Extracting items, calculating proportional tax allocations, and generating direct settle-up vectors.</p>
         </div>
       </section>
 
@@ -124,6 +191,41 @@
 
       <!-- Results Section -->
       <section id="results-container" class="results-container hidden">
+        <!-- Executive KPI Stats Grid -->
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <span class="kpi-label">Printed Grand Total</span>
+            <div class="kpi-value-row">
+              <span id="stat-grand-total" class="kpi-value">₹0.00</span>
+            </div>
+            <span class="kpi-sub">OCR Extracted Bill</span>
+          </div>
+
+          <div class="kpi-card">
+            <span class="kpi-label">Settlement Sum</span>
+            <div class="kpi-value-row">
+              <span id="stat-person-sum" class="kpi-value">₹0.00</span>
+            </div>
+            <span class="kpi-sub" id="stat-recon-sub">Exact Zero-Drift Match</span>
+          </div>
+
+          <div class="kpi-card">
+            <span class="kpi-label">Diners In Group</span>
+            <div class="kpi-value-row">
+              <span id="stat-diner-count" class="kpi-value">0</span>
+            </div>
+            <span class="kpi-sub">Identified Members</span>
+          </div>
+
+          <div class="kpi-card highlight-card">
+            <span class="kpi-label">Bill Payer</span>
+            <div class="kpi-value-row">
+              <span id="stat-payer-name" class="kpi-value highlight-payer">Unknown</span>
+            </div>
+            <span class="kpi-sub">Reimbursement Target</span>
+          </div>
+        </div>
+
         <!-- Anti-Hallucination Confidence Banner -->
         <div id="confidence-banner" class="confidence-banner high">
           <div class="confidence-left">
@@ -147,23 +249,42 @@
               <p id="recon-subtitle" class="recon-subtitle">Sum of individual totals matches bill grand total within tolerance.</p>
             </div>
           </div>
-          <div class="recon-stats">
-            <div class="stat-item">
-              <span class="stat-label">Printed Grand Total</span>
-              <span id="stat-grand-total" class="stat-value">₹0</span>
+        </div>
+
+        <!-- Settle Up Section -->
+        <div class="card settle-card">
+          <div class="card-header-row">
+            <div>
+              <h2 class="card-title">2. Settle Up (Direct Reimbursements)</h2>
+              <p class="card-desc">Direct transfers each person owes the payer</p>
             </div>
-            <div class="stat-item">
-              <span class="stat-label">Sum of Person Totals</span>
-              <span id="stat-person-sum" class="stat-value">₹0</span>
+            <div class="action-buttons-group">
+              <button type="button" id="share-whatsapp-btn" class="btn-whatsapp">
+                <span>📱</span> Share on WhatsApp
+              </button>
+              <button type="button" id="copy-settle-btn" class="btn-secondary-sm">
+                <span>📋</span> Copy Settle-Up
+              </button>
             </div>
           </div>
+          <div class="settle-up-meta">
+            <p><strong>Paid by:</strong> <span id="paid-by-name" class="highlight-payer">Priya</span></p>
+          </div>
+          <ul id="settle-up-list" class="settle-up-list">
+            <!-- Settle-up transfers injected dynamically -->
+          </ul>
         </div>
 
         <!-- Per Person Breakdown Table -->
         <div class="card">
           <div class="card-header-row">
-            <h2 class="card-title">2. Itemized Breakdown Per Person</h2>
-            <button type="button" id="copy-table-btn" class="btn-secondary-sm">Copy Table</button>
+            <div>
+              <h2 class="card-title">3. Itemized Breakdown Per Person</h2>
+              <p class="card-desc">Individual consumption, proportional GST, and final integer payable</p>
+            </div>
+            <button type="button" id="copy-table-btn" class="btn-secondary-sm">
+              <span>📊</span> Copy Table
+            </button>
           </div>
 
           <div class="table-responsive">
@@ -186,18 +307,15 @@
           </div>
         </div>
 
-        <!-- Settle Up Section -->
-        <div class="card">
+        <!-- Money Flow Diagram (Mermaid) -->
+        <div class="card flow-card" id="flow-card">
           <div class="card-header-row">
-            <h2 class="card-title">3. Settle Up (Direct Reimbursements)</h2>
-            <button type="button" id="copy-settle-btn" class="btn-secondary-sm">Copy Settle-Up Summary</button>
+            <div>
+              <h3 class="card-title">💸 Money Flow Diagram</h3>
+              <p class="card-desc">Visual flowchart of who reimburses whom</p>
+            </div>
           </div>
-          <div class="settle-up-meta">
-            <p><strong>Paid by:</strong> <span id="paid-by-name" class="highlight-payer">Priya</span></p>
-          </div>
-          <ul id="settle-up-list" class="settle-up-list">
-            <!-- Settle-up transfers injected dynamically -->
-          </ul>
+          <div id="mermaid-diagram" class="mermaid-container"></div>
         </div>
 
         <!-- Assumptions & Warnings Section -->
@@ -217,21 +335,13 @@
           </div>
         </div>
 
-        <!-- Money Flow Diagram (Mermaid) -->
-        <div class="card flow-card" id="flow-card">
-          <div class="card-header-row">
-            <h3 class="card-title" style="font-size:1rem;">💸 Money Flow Diagram</h3>
-            <span class="flow-subtitle">Who pays whom — at a glance</span>
-          </div>
-          <div id="mermaid-diagram" class="mermaid-container"></div>
-        </div>
-
         <!-- Advanced: Raw JSON (for devs) -->
         <details class="card json-card" id="json-details">
           <summary class="json-summary">🔧 Advanced: View Raw API Payload (JSON)</summary>
           <pre id="raw-json-viewer" class="raw-json-viewer"></pre>
         </details>
       </section>
+
     </main>
 
     <footer class="app-footer">

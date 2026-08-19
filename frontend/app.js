@@ -1,5 +1,5 @@
 // Fair-Split Frontend Application Logic
-// Configurable API base URL with LocalStorage persistence and in-UI settings panel
+// Configurable API base URL with LocalStorage persistence and smart cloud host detection
 const DEFAULT_API_URL = window.API_BASE_URL || (
   window.location.hostname === 'localhost' && window.location.port === '3000'
     ? 'http://localhost:8000'
@@ -7,11 +7,10 @@ const DEFAULT_API_URL = window.API_BASE_URL || (
 );
 let API_BASE_URL = localStorage.getItem('fair_split_api_url') || DEFAULT_API_URL;
 
-
 let selectedBase64Image = null;
 let lastSplitResponse = null;
 
-// Preset Scenarios Data
+// Preset Scenarios Data (R1 - R7)
 const SAMPLE_PRESETS = {
   R1: {
     description: "Two of us: Kavya and Deepak. We each had one chai. Deepak had the Vada Pav, and Kavya had the Banana Muffin. Kavya paid.",
@@ -70,7 +69,17 @@ const removeFileBtn = document.getElementById('remove-file-btn');
 const descriptionInput = document.getElementById('description-input');
 const submitBtn = document.getElementById('submit-btn');
 
-// Config & Settings Elements
+const loadingIndicator = document.getElementById('loading-indicator');
+const errorCard = document.getElementById('error-card');
+const errorMessage = document.getElementById('error-message');
+const resultsContainer = document.getElementById('results-container');
+const rawJsonViewer = document.getElementById('raw-json-viewer');
+
+const copyTableBtn = document.getElementById('copy-table-btn');
+const copySettleBtn = document.getElementById('copy-settle-btn');
+const shareWhatsAppBtn = document.getElementById('share-whatsapp-btn');
+
+// API Settings Elements
 const settingsToggleBtn = document.getElementById('settings-toggle-btn');
 const apiConfigPanel = document.getElementById('api-config-panel');
 const apiUrlInput = document.getElementById('api-url-input');
@@ -79,20 +88,23 @@ const testApiHealthBtn = document.getElementById('test-api-health-btn');
 const apiTestResult = document.getElementById('api-test-result');
 const apiStatusBadge = document.getElementById('api-status-badge');
 
-// Results & Copy Elements
-const loadingIndicator = document.getElementById('loading-indicator');
-const errorCard = document.getElementById('error-card');
-const errorMessage = document.getElementById('error-message');
-const resultsContainer = document.getElementById('results-container');
-const copyTableBtn = document.getElementById('copy-table-btn');
-const copySettleBtn = document.getElementById('copy-settle-btn');
-const rawJsonViewer = document.getElementById('raw-json-viewer');
+// Toast Element
+const toastEl = document.getElementById('toast');
 
-// Initialize API URL Input & Health Check
+function showToast(message) {
+  if (!toastEl) return;
+  toastEl.textContent = message;
+  toastEl.classList.remove('hidden');
+  setTimeout(() => {
+    toastEl.classList.add('hidden');
+  }, 3000);
+}
+
+// -------------------------------------------------------------
+// API Settings Panel Controller
+// -------------------------------------------------------------
 apiUrlInput.value = API_BASE_URL;
-checkApiHealth(API_BASE_URL);
 
-// Settings Panel Toggle
 settingsToggleBtn.addEventListener('click', () => {
   apiConfigPanel.classList.toggle('hidden');
 });
@@ -102,58 +114,74 @@ saveApiUrlBtn.addEventListener('click', () => {
   if (!newUrl) return;
   API_BASE_URL = newUrl;
   localStorage.setItem('fair_split_api_url', newUrl);
-  checkApiHealth(newUrl);
-  apiTestResult.textContent = 'Saved!';
-  apiTestResult.style.color = '#15803D';
-  setTimeout(() => { apiTestResult.textContent = ''; }, 2500);
+  apiTestResult.textContent = 'Saved! Testing endpoint...';
+  apiTestResult.style.color = 'var(--text-muted)';
+  testApiHealth();
 });
 
-testApiHealthBtn.addEventListener('click', () => {
+testApiHealthBtn.addEventListener('click', testApiHealth);
+
+async function testApiHealth() {
   const targetUrl = apiUrlInput.value.trim().replace(/\/+$/, '');
-  checkApiHealth(targetUrl, true);
-});
+  apiTestResult.textContent = 'Testing connection...';
+  apiTestResult.style.color = 'var(--text-muted)';
 
-async function checkApiHealth(url, isManualTest = false) {
-  if (isManualTest) apiTestResult.textContent = 'Testing /health...';
   try {
-    const res = await fetch(`${url}/health`, { method: 'GET' });
+    const res = await fetch(`${targetUrl}/health`);
     if (res.ok) {
+      const data = await res.json();
+      apiTestResult.textContent = `Connected! Status: ${data.status.toUpperCase()} (v${data.version})`;
+      apiTestResult.style.color = 'var(--success-text)';
+      apiStatusBadge.textContent = 'API: Online';
       apiStatusBadge.className = 'badge-online';
-      apiStatusBadge.textContent = url.includes('localhost') ? 'API: Local (200 OK)' : 'API: Live (200 OK)';
-      if (isManualTest) {
-        apiTestResult.textContent = 'Connected (200 OK)';
-        apiTestResult.style.color = '#15803D';
-      }
+      showToast('API Connected Successfully! ✅');
     } else {
       throw new Error(`HTTP ${res.status}`);
     }
   } catch (err) {
+    apiTestResult.textContent = `Failed to connect: ${err.message}`;
+    apiTestResult.style.color = 'var(--danger-text)';
+    apiStatusBadge.textContent = 'API: Offline';
     apiStatusBadge.className = 'badge-offline';
-    apiStatusBadge.textContent = 'API: Disconnected';
-    if (isManualTest) {
-      apiTestResult.textContent = `Unreachable: ${err.message}`;
-      apiTestResult.style.color = '#B91C1C';
-    }
   }
 }
 
-// Preset Scenario Chips Handler (Loads both description & receipt image)
-document.querySelectorAll('.sample-chip').forEach((chip) => {
-  chip.addEventListener('click', () => {
-    document.querySelectorAll('.sample-chip').forEach(c => c.classList.remove('active'));
-    chip.classList.add('active');
+// -------------------------------------------------------------
+// Quick Phrase Helpers
+// -------------------------------------------------------------
+document.querySelectorAll('.helper-tag').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const appendText = btn.dataset.append;
+    const current = descriptionInput.value.trim();
+    if (current) {
+      descriptionInput.value = current + ' ' + appendText;
+    } else {
+      descriptionInput.value = appendText;
+    }
+    descriptionInput.focus();
+    showToast(`Added: "${appendText}"`);
+  });
+});
 
+// -------------------------------------------------------------
+// Preset Scenarios Controller
+// -------------------------------------------------------------
+const sampleChips = document.querySelectorAll('.sample-chip');
+sampleChips.forEach(chip => {
+  chip.addEventListener('click', () => {
+    sampleChips.forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
     const sampleKey = chip.getAttribute('data-sample');
     loadSamplePreset(sampleKey);
   });
 });
 
-async function loadSamplePreset(presetKey) {
-  const preset = SAMPLE_PRESETS[presetKey];
+async function loadSamplePreset(key) {
+  const preset = SAMPLE_PRESETS[key];
   if (!preset) return;
+
   descriptionInput.value = preset.description;
 
-  // Auto-fetch and load sample image into base64
   try {
     const res = await fetch(preset.imageFile);
     if (res.ok) {
@@ -168,6 +196,7 @@ async function loadSamplePreset(presetKey) {
         previewMeta.textContent = `${sizeKb} KB • Sample Preset`;
         dropzonePrompt.classList.add('hidden');
         previewArea.classList.remove('hidden');
+        submitBtn.disabled = false;
         hideError();
       };
       reader.readAsDataURL(blob);
@@ -180,7 +209,9 @@ async function loadSamplePreset(presetKey) {
 // Auto-load default R2 preset on first load
 loadSamplePreset('R2');
 
+// -------------------------------------------------------------
 // File Upload & Base64 Conversion
+// -------------------------------------------------------------
 fileInput.addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
@@ -201,10 +232,8 @@ function handleFileSelection(file) {
   const reader = new FileReader();
   reader.onload = (event) => {
     const dataUrl = event.target.result;
-    // Strip data-URI prefix (e.g. "data:image/png;base64,") for API payload
     selectedBase64Image = dataUrl.split(',')[1];
 
-    // Show preview thumbnail and file size
     receiptPreview.src = dataUrl;
     previewFilename.textContent = file.name;
     const sizeKb = (file.size / 1024).toFixed(1);
@@ -236,19 +265,21 @@ dropzone.addEventListener('dragover', (e) => {
 });
 
 dropzone.addEventListener('dragleave', () => {
-  dropzone.style.borderColor = 'var(--border-color)';
+  dropzone.style.borderColor = '#CBD5E1';
 });
 
 dropzone.addEventListener('drop', (e) => {
   e.preventDefault();
-  dropzone.style.borderColor = 'var(--border-color)';
+  dropzone.style.borderColor = '#CBD5E1';
   if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
     fileInput.files = e.dataTransfer.files;
     handleFileSelection(e.dataTransfer.files[0]);
   }
 });
 
-// Form Submission
+// -------------------------------------------------------------
+// Form Submission & API Call
+// -------------------------------------------------------------
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
 
@@ -302,9 +333,6 @@ form.addEventListener('submit', async (e) => {
   }
 });
 
-/**
- * Translates raw backend error messages into user-friendly, actionable text.
- */
 function _friendlyError(detail, httpStatus) {
   if (typeof detail !== 'string') detail = JSON.stringify(detail);
 
@@ -335,7 +363,6 @@ function _friendlyError(detail, httpStatus) {
   return detail;
 }
 
-
 function setLoading(isLoading) {
   if (isLoading) {
     loadingIndicator.classList.remove('hidden');
@@ -349,6 +376,7 @@ function setLoading(isLoading) {
 function showError(msg) {
   errorMessage.textContent = msg;
   errorCard.classList.remove('hidden');
+  errorCard.scrollIntoView({ behavior: 'smooth' });
 }
 
 function hideError() {
@@ -356,9 +384,26 @@ function hideError() {
   errorMessage.textContent = '';
 }
 
+// -------------------------------------------------------------
 // Render Results
+// -------------------------------------------------------------
 function renderResults(data) {
-  // 0. Confidence Banner
+  // 0. KPI Stats Cards
+  const statGrandTotal = document.getElementById('stat-grand-total');
+  const statPersonSum = document.getElementById('stat-person-sum');
+  const statDinerCount = document.getElementById('stat-diner-count');
+  const statPayerName = document.getElementById('stat-payer-name');
+  const statReconSub = document.getElementById('stat-recon-sub');
+
+  statGrandTotal.textContent = `₹${data.grand_total.toFixed(2)}`;
+  statPersonSum.textContent = `₹${data.reconciliation.sum_of_person_totals.toFixed(2)}`;
+  statDinerCount.textContent = (data.per_person || []).length;
+  statPayerName.textContent = data.paid_by || 'Not Specified';
+
+  const isMatch = data.reconciliation && data.reconciliation.matches_bill;
+  statReconSub.textContent = isMatch ? 'Exact Zero-Drift Match' : 'Discrepancy Flagged';
+
+  // 1. Confidence Banner
   const confidenceBanner = document.getElementById('confidence-banner');
   const confidenceBadge = document.getElementById('confidence-badge');
   const confidenceTitle = document.getElementById('confidence-title');
@@ -392,17 +437,11 @@ function renderResults(data) {
     });
   }
 
-  // 1. Reconciliation Banner
+  // 2. Reconciliation Status Banner
   const reconciliationBanner = document.getElementById('reconciliation-banner');
   const reconIcon = document.getElementById('recon-icon');
   const reconTitle = document.getElementById('recon-title');
   const reconSubtitle = document.getElementById('recon-subtitle');
-  const statGrandTotal = document.getElementById('stat-grand-total');
-  const statPersonSum = document.getElementById('stat-person-sum');
-
-  const isMatch = data.reconciliation && data.reconciliation.matches_bill;
-  statGrandTotal.textContent = `₹${data.grand_total.toFixed(2)}`;
-  statPersonSum.textContent = `₹${data.reconciliation.sum_of_person_totals.toFixed(2)}`;
 
   if (isMatch) {
     reconciliationBanner.className = 'reconciliation-banner';
@@ -416,7 +455,41 @@ function renderResults(data) {
     reconSubtitle.textContent = 'The sum of individual person totals does not match the printed grand total.';
   }
 
-  // 2. Per Person Table
+  // 3. Settle Up Section
+  const paidByName = document.getElementById('paid-by-name');
+  const settleUpList = document.getElementById('settle-up-list');
+  paidByName.textContent = data.paid_by || 'Not Specified';
+  settleUpList.innerHTML = '';
+
+  if (data.settle_up && data.settle_up.length > 0) {
+    data.settle_up.forEach((t) => {
+      const li = document.createElement('li');
+      li.className = 'settle-up-item';
+      
+      const fromInitial = (t.from || t.from_person || 'U').charAt(0).toUpperCase();
+      const toInitial = (t.to || t.to_person || 'P').charAt(0).toUpperCase();
+
+      li.innerHTML = `
+        <div class="settle-left">
+          <div class="avatar-circle">${fromInitial}</div>
+          <span class="settle-text">
+            <strong>${escapeHtml(t.from || t.from_person)}</strong>
+            <span class="transfer-arrow"> ➔ </span>
+            <strong>${escapeHtml(t.to || t.to_person)}</strong>
+          </span>
+        </div>
+        <span class="settle-amount">₹${t.amount.toFixed(2)}</span>
+      `;
+      settleUpList.appendChild(li);
+    });
+  } else {
+    const li = document.createElement('li');
+    li.className = 'settle-up-item';
+    li.innerHTML = `<em>No debt settle-up instructions (no payer identified or bill paid individually).</em>`;
+    settleUpList.appendChild(li);
+  }
+
+  // 4. Per Person Table
   const splitTableBody = document.getElementById('split-table-body');
   splitTableBody.innerHTML = '';
   const payer = data.paid_by ? data.paid_by.trim().toLowerCase() : null;
@@ -424,6 +497,7 @@ function renderResults(data) {
   data.per_person.forEach((person) => {
     const tr = document.createElement('tr');
     const isPayer = payer && person.name.trim().toLowerCase() === payer;
+    if (isPayer) tr.className = 'is-payer-row';
 
     const itemsHtml = person.items.map(item => `
       <span class="item-badge ${item.is_shared ? 'shared' : ''}">
@@ -446,32 +520,7 @@ function renderResults(data) {
     splitTableBody.appendChild(tr);
   });
 
-  // 3. Settle Up Section
-  const paidByName = document.getElementById('paid-by-name');
-  const settleUpList = document.getElementById('settle-up-list');
-  paidByName.textContent = data.paid_by || 'Not Specified';
-  settleUpList.innerHTML = '';
-
-  if (data.settle_up && data.settle_up.length > 0) {
-    data.settle_up.forEach((t) => {
-      const li = document.createElement('li');
-      li.className = 'settle-up-item';
-      li.innerHTML = `
-        <span class="settle-text">
-          <strong>${escapeHtml(t.from)}</strong> pays <strong>${escapeHtml(t.to)}</strong>
-        </span>
-        <span class="settle-amount">₹${t.amount.toFixed(2)}</span>
-      `;
-      settleUpList.appendChild(li);
-    });
-  } else {
-    const li = document.createElement('li');
-    li.className = 'settle-up-item';
-    li.innerHTML = `<em>No debt settle-up instructions (no payer identified or bill paid individually).</em>`;
-    settleUpList.appendChild(li);
-  }
-
-  // 4. Assumptions & Flags
+  // 5. Assumptions & Flags
   const assumptionsList = document.getElementById('assumptions-list');
   const flagsBlock = document.getElementById('flags-block');
   const flagsList = document.getElementById('flags-list');
@@ -501,21 +550,19 @@ function renderResults(data) {
     flagsBlock.classList.add('hidden');
   }
 
-  // 5. Money Flow Diagram (Mermaid)
+  // 6. Money Flow Diagram (Mermaid)
   renderMoneyFlowDiagram(data);
 
-  // 6. Raw JSON Inspector
+  // 7. Raw JSON Inspector
   rawJsonViewer.textContent = JSON.stringify(data, null, 2);
 
-  // Reveal results
+  // Reveal results with smooth scroll
   resultsContainer.classList.remove('hidden');
   resultsContainer.scrollIntoView({ behavior: 'smooth' });
 }
 
 /**
  * Builds and renders a Mermaid flowchart showing the settle-up money flow.
- * For each person who owes the payer, draws an arrow: Person -->|₹amount| Payer
- * Color-codes: payer = green, debtors = purple, no-payer = neutral.
  */
 async function renderMoneyFlowDiagram(data) {
   const container = document.getElementById('mermaid-diagram');
@@ -527,12 +574,10 @@ async function renderMoneyFlowDiagram(data) {
   const perPerson = data.per_person || [];
 
   if (!payer || settleUp.length === 0) {
-    // No payer — show a simple breakdown of totals per person
     let def = 'graph LR\n';
     def += '  BILL(["🧾 Bill Total\\n₹' + data.grand_total.toFixed(0) + '"])\n';
     perPerson.forEach((p, i) => {
       const nodeId = 'P' + i;
-      const safe = p.name.replace(/[^a-zA-Z0-9]/g, '_');
       def += `  ${nodeId}(["👤 ${p.name}\\n₹${p.total.toFixed(0)}"])\n`;
       def += `  BILL --> ${nodeId}\n`;
     });
@@ -541,10 +586,7 @@ async function renderMoneyFlowDiagram(data) {
     return;
   }
 
-  // Build directed graph: each debtor → payer
   let def = 'graph LR\n';
-
-  // Payer node
   const payerSafe = payer.replace(/[^a-zA-Z0-9]/g, '_');
   def += `  ${payerSafe}(["💳 ${payer}\\n Paid ₹${data.grand_total.toFixed(0)}"])\n`;
   def += `  style ${payerSafe} fill:#059669,color:#fff,stroke:#047857\n`;
@@ -569,14 +611,14 @@ async function _renderMermaid(container, definition) {
     const { svg } = await mermaid.render(id, definition);
     container.innerHTML = svg;
   } catch (e) {
-    container.innerHTML = '<span class="mermaid-placeholder">⚠️ Flow diagram unavailable for this result.</span>';
+    container.innerHTML = '<span style="color:#94a3b8;font-size:12px;">⚠️ Flow diagram unavailable for this result.</span>';
     console.warn('Mermaid render failed:', e);
   }
 }
 
-
-
-// Copy Utilities
+// -------------------------------------------------------------
+// Copy & Share Handlers
+// -------------------------------------------------------------
 copyTableBtn.addEventListener('click', () => {
   if (!lastSplitResponse || !lastSplitResponse.per_person) return;
   let text = "Person\tSubtotal\tTax Share\tService Share\tDiscount Share\tTotal Payable\n";
@@ -584,23 +626,36 @@ copyTableBtn.addEventListener('click', () => {
     text += `${p.name}\t₹${p.subtotal.toFixed(2)}\t₹${p.tax_share.toFixed(2)}\t₹${p.service_share.toFixed(2)}\t₹${p.discount_share.toFixed(2)}\t₹${p.total.toFixed(2)}\n`;
   });
   navigator.clipboard.writeText(text).then(() => {
-    const orig = copyTableBtn.textContent;
-    copyTableBtn.textContent = 'Copied! ✓';
-    setTimeout(() => { copyTableBtn.textContent = orig; }, 2000);
+    showToast('Table copied to clipboard! 📋');
   });
 });
 
 copySettleBtn.addEventListener('click', () => {
   if (!lastSplitResponse || !lastSplitResponse.settle_up || lastSplitResponse.settle_up.length === 0) return;
-  let text = `Settle-Up Reimbursements (Paid by ${lastSplitResponse.paid_by || 'Unknown'}):\n`;
+  let text = `💸 Fair-Split Settle-Up (Paid by ${lastSplitResponse.paid_by || 'Unknown'}):\n\n`;
   lastSplitResponse.settle_up.forEach(t => {
     text += `• ${t.from} pays ${t.to}: ₹${t.amount.toFixed(2)}\n`;
   });
+  text += `\nTotal Bill: ₹${lastSplitResponse.grand_total.toFixed(2)}`;
   navigator.clipboard.writeText(text).then(() => {
-    const orig = copySettleBtn.textContent;
-    copySettleBtn.textContent = 'Copied! ✓';
-    setTimeout(() => { copySettleBtn.textContent = orig; }, 2000);
+    showToast('Settle-up summary copied! 📋');
   });
+});
+
+shareWhatsAppBtn.addEventListener('click', () => {
+  if (!lastSplitResponse || !lastSplitResponse.settle_up || lastSplitResponse.settle_up.length === 0) return;
+  let text = `🧾 *Fair-Split Bill Settlement*\n`;
+  text += `💰 *Total Bill:* ₹${lastSplitResponse.grand_total.toFixed(2)}\n`;
+  text += `💳 *Paid by:* ${lastSplitResponse.paid_by || 'Unknown'}\n\n`;
+  text += `*Direct Reimbursements:*\n`;
+  lastSplitResponse.settle_up.forEach(t => {
+    text += `👉 *${t.from}* pays *${t.to}*: ₹${t.amount.toFixed(2)}\n`;
+  });
+  text += `\n_Calculated with Fair-Split Engine_`;
+
+  const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+  window.open(waUrl, '_blank');
+  showToast('Opening WhatsApp... 📱');
 });
 
 function escapeHtml(str) {
