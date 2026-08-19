@@ -43,7 +43,7 @@ const SAMPLE_PRESETS = {
     title: "R5: Filter & Brew Cafe (2p)"
   },
   R6: {
-    description: "Four of us: Rohan, Divya, Arjun, Preethi. Rohan and Arjun shared the Butter Chicken (2 portions). Divya had the Palak Paneer alone. We all shared the Garlic Naan (6 pcs), Laccha Paratha, and Jeera Rice. The Dahi Puri starter was shared by Divya and Preethi. Gulab Jamun was shared equally across all four. Rohan paid.",
+    description: "Four of us: Rohan, Divya, Arjun, Preethi. Chicken Tikka was shared by Rohan and Arjun. The Dahi Puri was shared by Divya and Preethi. Rohan and Arjun shared the Butter Chicken (2 portions). Divya had the Palak Paneer alone. We all shared the Garlic Naan (6 pcs), Laccha Paratha, and Steamed Rice. Sweet Lassis were for Divya and Preethi. Gulab Jamun was shared equally across all four. Rohan paid.",
     imageFile: "samples/R6.png",
     filename: "R6_spice_affair_receipt.png",
     title: "R6: Spice Affair (4p)"
