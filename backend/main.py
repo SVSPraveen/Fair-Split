@@ -124,6 +124,38 @@ def health_check() -> Dict[str, Any]:
     }
 
 
+@app.get("/api/config", summary="API Configuration")
+@app.get("/config", summary="Configuration")
+def get_config() -> Dict[str, Any]:
+    """Returns runtime model configurations and feature flags."""
+    return {
+        "app_name": "Fair-Split",
+        "version": "2.0.0",
+        "models": {
+            "vision_primary": "qwen/qwen3.6-27b (Groq)",
+            "vision_secondary": "gemini-3.6-flash (Google)",
+            "vision_fallback": "google/gemma-4-26b-a4b-it:free (OpenRouter)",
+            "text_primary": "openai/gpt-oss-120b (Groq)",
+            "text_secondary": "gemini-3.6-flash (Google)",
+            "text_fallback": "nvidia/nemotron-3-super-120b-a12b:free (OpenRouter)"
+        },
+        "features": {
+            "lrm_rounding": True,
+            "anti_hallucination_cross_check": True,
+            "instant_fallback": True,
+            "whatsapp_share": True
+        }
+    }
+
+
+@app.get("/api/jobs")
+@app.get("/api/loop/status")
+@app.get("/api/metrics")
+def get_metrics_stub() -> Dict[str, Any]:
+    """Utility endpoint for IDE monitoring agents and health probes."""
+    return {"status": "ok", "active_jobs": 0, "healthy": True}
+
+
 @app.post(
     "/split",
     response_model=SplitResult,
