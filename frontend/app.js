@@ -363,13 +363,55 @@ function _friendlyError(detail, httpStatus) {
   return detail;
 }
 
+let loadingTimerInterval = null;
+let loadingStartTime = null;
+
 function setLoading(isLoading) {
+  const timerEl = document.getElementById('loading-timer');
+  const subtextEl = document.getElementById('loading-subtext');
+  const step1 = document.getElementById('step-pill-1');
+  const step2 = document.getElementById('step-pill-2');
+  const step3 = document.getElementById('step-pill-3');
+
   if (isLoading) {
     loadingIndicator.classList.remove('hidden');
     submitBtn.disabled = true;
+
+    // Reset steps
+    if (step1) { step1.className = 'step-pill active'; }
+    if (step2) { step2.className = 'step-pill'; }
+    if (step3) { step3.className = 'step-pill'; }
+    if (subtextEl) { subtextEl.textContent = 'Scanning receipt layout, line items, and tax lines...'; }
+
+    // Start timer & step progression
+    loadingStartTime = Date.now();
+    if (timerEl) timerEl.textContent = '0.0s';
+
+    clearInterval(loadingTimerInterval);
+    loadingTimerInterval = setInterval(() => {
+      const elapsed = (Date.now() - loadingStartTime) / 1000;
+      if (timerEl) timerEl.textContent = `${elapsed.toFixed(1)}s`;
+
+      if (elapsed > 1.2 && elapsed <= 2.5) {
+        if (step1) step1.className = 'step-pill completed';
+        if (step2) step2.className = 'step-pill active';
+        if (subtextEl) subtextEl.textContent = 'Cross-referencing food items with group members...';
+      } else if (elapsed > 2.5) {
+        if (step1) step1.className = 'step-pill completed';
+        if (step2) step2.className = 'step-pill completed';
+        if (step3) step3.className = 'step-pill active';
+        if (subtextEl) subtextEl.textContent = 'Applying Largest Remainder Method for exact rupee settlement...';
+      }
+    }, 100);
+
   } else {
+    clearInterval(loadingTimerInterval);
     loadingIndicator.classList.add('hidden');
     submitBtn.disabled = false;
+
+    if (step1) step1.className = 'step-pill completed';
+    if (step2) step2.className = 'step-pill completed';
+    if (step3) step3.className = 'step-pill completed';
   }
 }
 
