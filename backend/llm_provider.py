@@ -13,6 +13,7 @@ from groq import Groq
 import openai
 from openai import OpenAI
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
+from backend.guardrails import VISION_SYSTEM_PROMPT, TEXT_SYSTEM_PROMPT
 
 load_dotenv()
 
@@ -205,7 +206,7 @@ class LLMProvider:
                     resp = self._groq_client.chat.completions.create(
                         model="qwen/qwen3.6-27b",
                         messages=[
-                            {"role": "system", "content": "You are a specialized receipt OCR JSON engine. Output ONLY valid JSON conforming to the schema. Do not output preamble, thinking tags, or markdown commentary."},
+                            {"role": "system", "content": VISION_SYSTEM_PROMPT},
                             {
                                 "role": "user",
                                 "content": [
@@ -261,6 +262,7 @@ class LLMProvider:
                     model=GEMINI_VISION_PRIMARY,
                     contents=[img, prompt],
                     config=types.GenerateContentConfig(
+                        system_instruction=VISION_SYSTEM_PROMPT,
                         temperature=0.1,
                         max_output_tokens=4096,
                         http_options=types.HttpOptions(timeout=int(timeout_seconds * 1000))
@@ -286,6 +288,7 @@ class LLMProvider:
             resp = self._openrouter_client.chat.completions.create(
                 model=OPENROUTER_VISION_FALLBACK,
                 messages=[
+                    {"role": "system", "content": VISION_SYSTEM_PROMPT},
                     {
                         "role": "user",
                         "content": [
@@ -379,11 +382,12 @@ class LLMProvider:
         # 1. Try Gemini Text
         if self._gemini_client:
             try:
-                full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+                full_prompt = f"{TEXT_SYSTEM_PROMPT}\n\n{prompt}" if not system_prompt else f"{system_prompt}\n\n{prompt}"
                 response = self._gemini_client.models.generate_content(
                     model=GEMINI_VISION_PRIMARY,
                     contents=full_prompt,
                     config=types.GenerateContentConfig(
+                        system_instruction=TEXT_SYSTEM_PROMPT,
                         temperature=0.1,
                         max_output_tokens=4096,
                         http_options=types.HttpOptions(timeout=int(timeout_seconds * 1000))

@@ -300,7 +300,20 @@ def compute_split(
             confidence_reasons.append("Description parsing: Groq returned 429 rate limit, falling back to OpenRouter.")
         else:
             confidence_reasons.append("Description parsing utilized fallback model instead of primary provider.")
-        
+
+    # Partial extraction — some items may have been missed by OCR
+    if getattr(receipt, "partial_extraction", False):
+        confidence_reasons.append(
+            "Partial extraction detected: the sum of extracted line items is significantly "
+            "less than the printed grand total. Verify the receipt image shows all items clearly."
+        )
+
+    # Surface any hallucination guard flags from extraction
+    for eflag in getattr(receipt, "extraction_flags", []):
+        if ("Hallucination guard" in eflag or "Partial extraction" in eflag or "Security" in eflag):
+            if eflag not in confidence_reasons:
+                confidence_reasons.append(eflag)
+
     # Check unmatched mentions or unclear references
     for um in description.unmatched_mentions:
         if f"Unmatched mention from description: '{um}'" not in confidence_reasons:

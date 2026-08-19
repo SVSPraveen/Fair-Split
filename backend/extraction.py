@@ -1,12 +1,14 @@
 import os
 import json
 import re
+import hashlib
 from typing import Optional, List, Dict, Any
 from dotenv import load_dotenv
 from pydantic import ValidationError
 
 from backend.models import ReceiptData, ReceiptItem, DiscountDetail, TaxBreakdown
 from backend.llm_provider import get_vision_client
+from backend.guardrails import detect_hallucination_flags, sanitize_llm_string
 
 # Load environment variables (.env)
 load_dotenv()
@@ -492,9 +494,25 @@ def extract_receipt(
     # Normalize OCR extraction errors before self-check
     _normalize_receipt_items(receipt)
 
-    # Run self-check validations
+    # Run mathematical self-check validations
     flags = _run_self_checks(receipt)
-    receipt.extraction_flags = flags
+
+    # Run hallucination detection guardrails
+    hallucination_flags = detect_hallucination_flags(receipt)
+    flags.extend(hallucination_flags)
+
+    # Set partial_extraction flag if detected
+    partial_keywords = ["partial extraction", "Partial extraction"]
+    receipt.partial_extraction = any(
+        any(kw in f for kw in partial_keywords) for f in flags
+    )
+
+    # Sanitize restaurant name (XSS guard on LLM output)
+    if receipt.restaurant_name:
+        receipt.restaurant_name = sanitize_llm_string(receipt.restaurant_name, max_len=100)
+
+    # Deduplicate flags preserving order
+    receipt.extraction_flags = list(dict.fromkeys(flags))
 
     # Cache successful extraction
     _DYNAMIC_RECEIPT_CACHE[image_hash] = receipt.model_copy(deep=True)

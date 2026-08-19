@@ -32,6 +32,17 @@ class ReceiptItem(BaseModel):
         parsed = _parse_float(v)
         return parsed if parsed is not None else 0.0
 
+    @field_validator("name", mode="before")
+    @classmethod
+    def sanitize_name(cls, v: Any) -> str:
+        """Strip HTML/script tags and truncate long names (hallucination guard)."""
+        if not isinstance(v, str):
+            v = str(v) if v is not None else "Unknown Item"
+        import re
+        v = re.sub(r"<[^>]+>", "", v)   # strip HTML tags
+        v = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", v)  # control chars
+        return v[:120].strip() or "Unknown Item"
+
 
 class DiscountDetail(BaseModel):
     amount: float = Field(..., description="Total discount amount deducted")
@@ -67,6 +78,7 @@ class ReceiptData(BaseModel):
     round_off: Optional[float] = Field(None, description="Round-off adjustment (+/-) if any")
     grand_total: float = Field(..., description="Final payable grand total")
     extraction_flags: List[str] = Field(default_factory=list, description="Quality and validation warning flags")
+    partial_extraction: bool = Field(default=False, description="True if item total is significantly less than grand_total (items may have been missed)")
     used_fallback: bool = Field(default=False, description="True if fallback vision provider was used")
     fallback_reason: Optional[str] = Field(None, description="Reason fallback was triggered: 'timeout', 'rate_limit_429', 'error'")
 
@@ -193,9 +205,31 @@ class SplitResult(BaseModel):
 
 
 class SplitRequest(BaseModel):
-    receipt_base64: str = Field(..., description="Base64 encoded receipt image bytes (without data-URI prefix)")
-    description: str = Field(..., description="Natural language description of group dining consumption")
+    receipt_base64: str = Field(
+        ...,
+        description="Base64 encoded receipt image bytes (without data-URI prefix)",
+        max_length=28_000_000  # ~20MB binary → ~27.3MB base64 with 4/3 overhead
+    )
+    description: str = Field(
+        ...,
+        description="Natural language description of group dining consumption",
+        max_length=3000
+    )
 
+    @field_validator("description", mode="before")
+    @classmethod
+    def strip_description(cls, v: Any) -> str:
+        if not isinstance(v, str):
+            return ""
+        return v.strip()
 
-
-
+    @field_validator("receipt_base64", mode="before")
+    @classmethod
+    def strip_base64(cls, v: Any) -> str:
+        if not isinstance(v, str):
+            raise ValueError("receipt_base64 must be a string")
+        # Strip data URI prefix if present
+        s = v.strip()
+        if s.startswith("data:"):
+            s = s.split(",", 1)[-1].strip()
+        return s

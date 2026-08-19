@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from backend.models import DescriptionData, ItemAssignment
 from backend.llm_provider import get_text_client
+from backend.guardrails import TEXT_SYSTEM_PROMPT, sanitize_llm_string
 
 # Load environment variables (.env)
 load_dotenv()
@@ -153,10 +154,15 @@ def parse_description(
     try:
         raw_response, used_fb, fb_reason = client.generate_text_with_status(
             prompt=prompt,
+            system_prompt=TEXT_SYSTEM_PROMPT,
             force_fallback=force_fallback
         )
         parsed_dict = _clean_and_parse_json(raw_response)
         desc_obj = DescriptionData.model_validate(parsed_dict)
+        # Sanitize person names returned by LLM (XSS guard)
+        desc_obj.people = [sanitize_llm_string(p, max_len=80) for p in desc_obj.people if p]
+        if desc_obj.payer:
+            desc_obj.payer = sanitize_llm_string(desc_obj.payer, max_len=80)
         desc_obj.used_fallback = used_fb
         desc_obj.fallback_reason = fb_reason
         return desc_obj
@@ -174,10 +180,14 @@ def parse_description(
     try:
         raw_response, used_fb, fb_reason = client.generate_text_with_status(
             prompt=retry_prompt,
+            system_prompt=TEXT_SYSTEM_PROMPT,
             force_fallback=force_fallback
         )
         parsed_dict = _clean_and_parse_json(raw_response)
         desc_obj = DescriptionData.model_validate(parsed_dict)
+        desc_obj.people = [sanitize_llm_string(p, max_len=80) for p in desc_obj.people if p]
+        if desc_obj.payer:
+            desc_obj.payer = sanitize_llm_string(desc_obj.payer, max_len=80)
         desc_obj.used_fallback = used_fb
         desc_obj.fallback_reason = fb_reason
         return desc_obj
