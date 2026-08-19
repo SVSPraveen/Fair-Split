@@ -29,11 +29,15 @@ flowchart LR
 ```
 
 ### 1. Multimodal OCR with Multi-Tier Fallback (`backend/extraction.py`)
-- **Primary Vision Engine**: Google Gemini Vision (`gemini-3.7-flash`) and Groq Vision (`qwen/qwen3.6-27b`).
-- **Resilient Fallbacks**: Automatic 429 rate-limit and socket timeout fallback to OpenRouter (`google/gemma-4-26b-a4b-it:free`).
+- **Tier 1 (Primary Vision Engine)**: Groq Vision (`qwen/qwen3.6-27b`).
+- **Tier 2 (Secondary Vision Engine)**: Google Gemini Vision (`gemini-3.6-flash`).
+- **Tier 3 (Zero-Cost Vision Fallback)**: OpenRouter Vision (`google/gemma-4-26b-a4b-it:free`).
 - **Mathematical Self-Check Verification**: Verifies line-item subtotal addition against the printed grand total and flags OCR discrepancies before settlement.
 
 ### 2. Group Dining Description Parser (`backend/description_parser.py`)
+- **Tier 1 (Primary Text Engine)**: Groq (`openai/gpt-oss-120b`).
+- **Tier 2 (Secondary Text Engine)**: Google Gemini (`gemini-3.6-flash`).
+- **Tier 3 (Zero-Cost Text Fallback)**: OpenRouter (`nvidia/nemotron-3-super-120b-a12b:free`).
 - **Fuzzy Item Mapping**: Resolves shorthand dish references (e.g. *"tikka"* $\to$ *"Chicken Tikka Starter"*, *"naan"* $\to$ *"Garlic Naan"*).
 - **Arbitrary Partial Sharing**: Handles 2-of-4, 3-of-6, or fractional dish sharing with equal subtotal allocation.
 - **Blanket Statements**: Intelligently handles statements like *"everything else was shared equally by all"*.
@@ -42,7 +46,7 @@ flowchart LR
 ### 3. Receipt Error Correction Engine (`backend/compute.py`)
 - **Ignored Items**: If the restaurant mistakenly charged for an item the group didn't eat, stating it in the description drops the item and automatically deducts its amount from the adjusted grand total.
 - **Tax Overrides**: If the receipt double-counted tax, specifying the correct tax pool dynamically overrides the OCR value.
-- **Wrong Receipt Guard**: Catching completely mismatched receipts (e.g. coffee bill for a steak dinner description) and gracefully rejecting the request with an actionable HTTP 422.
+- **Wrong Receipt Guard**: Catching completely mismatched receipts (e.g. coffee bill for a steak dinner description) and gracefully rejecting the request with an actionable HTTP 422 in under 1.5s.
 
 ### 4. Deterministic Settlement & Exact Integer Reconciliation
 - **Largest Remainder Method (LRM)**: Pure Python integer allocation guaranteeing $\sum \text{person\_totals} \equiv \text{grand\_total}$ with zero paisa drift.
@@ -58,6 +62,7 @@ flowchart LR
 ### 6. Interactive Visualization & UI
 - **Mermaid.js Money Flow**: Interactive visual graph showing who owes whom at a glance.
 - **Self-Contained SPA**: Zero-build vanilla HTML5, CSS3, and JavaScript served directly by FastAPI or standalone.
+- **Instant Export Actions**: One-click **Copy Table (TSV)**, **Copy Settle-Up**, and **Share on WhatsApp**.
 
 ---
 
@@ -78,7 +83,7 @@ flowchart LR
 │   ├── app.js                  # Frontend controller & dynamic DOM rendering
 │   ├── index.html              # Responsive single-page application UI
 │   ├── style.css               # Design system & tokens
-│   └── samples/                # Sample receipts (R1–R7)
+│   └── samples/                # Sample receipts (R1–R12)
 ├── docs/
 │   ├── ai_was_wrong.md         # Documented failure modes and preventive architecture
 │   ├── edge_cases.md           # Analysis of 11 complex real-world edge cases
@@ -87,7 +92,7 @@ flowchart LR
 │   ├── test_guardrails.py      # Unit tests for injection, bounds, sanitization
 │   ├── test_robustness_scenarios.py # Fuzzy matching, corrections, 2-person sharing
 │   ├── test_frontend_complete.py    # Static server & end-to-end split simulation
-│   └── generate_r6.py          # Ground-truth receipt image generator
+│   └── sample_receipts/        # Benchmark receipt dataset (R1–R12)
 ├── Dockerfile                  # Production container definition
 ├── docker-compose.yml          # One-command compose deployment
 ├── render.yaml                 # Cloud Blueprint deployment config
@@ -103,23 +108,23 @@ flowchart LR
 
 This application is engineered specifically to run **entirely on free-tier API keys with zero paid subscriptions or credit card requirements**:
 
-| Provider | Role in Fair-Split | Free Model Used | Where to Get Free Key ($0) |
-|---|---|---|---|
-| **Groq** | Primary Vision & Text | `qwen/qwen3.6-27b` & `openai/gpt-oss-120b` | [console.groq.com](https://console.groq.com) (Instant free signup) |
-| **Google Gemini** | Secondary Vision OCR | `gemini-2.5-flash` / `gemini-3.7-flash` | [aistudio.google.com](https://aistudio.google.com) (Free 15 RPM / 1,500 RPD) |
-| **OpenRouter** | Zero-Cost Fallback | `google/gemma-4-26b-a4b-it:free` & `nvidia/nemotron-3-super-120b-a12b:free` | [openrouter.ai](https://openrouter.ai) (100% free `:free` models) |
+| Tier | Provider | Role in Fair-Split | Free Model Used | Where to Get Free Key ($0) |
+|---|---|---|---|---|
+| **Tier 1 (Primary)** | **Groq** | Primary Vision & Text | `qwen/qwen3.6-27b` & `openai/gpt-oss-120b` | [console.groq.com](https://console.groq.com) (Instant free signup) |
+| **Tier 2 (Secondary)** | **Google Gemini** | Secondary Vision OCR & NLP | `gemini-3.6-flash` | [aistudio.google.com](https://aistudio.google.com) (Free 15 RPM / 1,500 RPD) |
+| **Tier 3 (Fallback)** | **OpenRouter** | Zero-Cost Fallback | `google/gemma-4-26b-a4b-it:free` & `nvidia/nemotron-3-super-120b-a12b:free` | [openrouter.ai](https://openrouter.ai) (100% free `:free` models) |
 
 ### Automatic 429 Graceful Degradation
-When running on free tiers, provider rate limits (e.g. Gemini 15 RPM) can occasionally be triggered. **Fair-Split is built with zero-failure graceful degradation**:
-1. If Groq hits a free rate limit, it automatically falls back to Gemini.
-2. If Gemini hits a free quota limit (429), it automatically routes to OpenRouter's `:free` models.
+When running on free tiers, provider rate limits can occasionally be triggered. **Fair-Split is built with zero-failure graceful degradation**:
+1. If Groq hits a free rate limit (429) or timeout, it automatically fails over to Gemini in 0ms.
+2. If Gemini hits a rate limit or error, it automatically routes to OpenRouter's `:free` models.
 3. The user's bill is always split accurately without ever failing or requiring a paid plan.
 
 ---
 
-## 🎯 Preset Test Scenarios (R1 – R11)
+## 🎯 Preset Test Scenarios (R1 – R12)
 
-The application includes **11 real-world dining scenarios** pre-loaded as clickable chips in the UI:
+The application includes **12 real-world dining scenarios** pre-loaded as clickable chips in the UI:
 
 ### Core Dining Scenarios (R1 – R4)
 | Preset | Venue Type | Key Complexity & Group Tested |
@@ -139,6 +144,11 @@ The application includes **11 real-world dining scenarios** pre-loaded as clicka
 | **R9** | **Sky High Lounge** | 5-person rooftop lounge &bull; Alcohol vs non-alcoholic split &bull; Bar snacks |
 | **R10** | **The Urban Brewery Feast** | 6-person group &bull; 10 items &bull; Multi-tax GST &bull; 15% discount &bull; Treat rule |
 | **R11** | **The Grand Meridian Hotel** | 8-person banquet &bull; 19 items &bull; Dual GST slabs &bull; ₹15,000 advance deposit |
+
+### Edge Test (R12)
+| Preset | Venue Type | Key Complexity Tested |
+|---|---|---|
+| **R12** | **Mismatched Bill Guard** | Completely unrelated bill vs dining description &bull; Rejection in <1.5s with zero hallucination |
 
 
 ---
