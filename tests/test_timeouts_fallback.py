@@ -82,7 +82,8 @@ def test_timeouts_and_fallbacks():
         )
     ]
 
-    with patch.object(provider._gemini_client.models, "generate_content", side_effect=mock_gemini_timeout), \
+    with patch.object(provider._groq_client.chat.completions, "create", side_effect=httpx.ReadTimeout("Groq timeout")), \
+         patch.object(provider._gemini_client.models, "generate_content", side_effect=mock_gemini_timeout), \
          patch.object(provider._openrouter_client.chat.completions, "create", return_value=mock_fallback_vision_resp):
         
         start_time = time.perf_counter()

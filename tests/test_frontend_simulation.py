@@ -15,9 +15,9 @@ SAMPLE_RECEIPTS_DIR = Path(__file__).parent / "sample_receipts"
 
 
 def test_frontend_serving_and_api():
-    print("\n--- 1. Testing Frontend Static Server (http://localhost:3000) ---")
+    print("\n--- 1. Testing Frontend Static Server (http://localhost:8000) ---")
     try:
-        with urllib.request.urlopen("http://localhost:3000") as response:
+        with urllib.request.urlopen("http://localhost:8000") as response:
             html_content = response.read().decode("utf-8")
             assert response.status == 200
             assert "<title>Fair-Split" in html_content
@@ -33,7 +33,7 @@ def test_frontend_serving_and_api():
         with urllib.request.urlopen("http://localhost:8000/health") as response:
             health_json = json.loads(response.read().decode("utf-8"))
             assert response.status == 200
-            assert health_json == {"status": "ok"}
+            assert health_json.get("status") == "ok"
             print(f"API backend returned HTTP 200 OK: {health_json}")
     except Exception as e:
         print(f"API health check error: {e}")

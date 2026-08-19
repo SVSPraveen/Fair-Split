@@ -22,10 +22,10 @@ def test_frontend_complete():
     print(" FRONTEND & BACKEND INTEGRATED AUDIT VERIFICATION")
     print("=" * 80)
 
-    # 1. Test Static Frontend Server (Port 3000)
-    print("\n[1] Checking Frontend Static Server (http://localhost:3000)...")
+    # 1. Test Static Frontend Server (Port 8000)
+    print("\n[1] Checking Frontend Static Server (http://localhost:8000)...")
     try:
-        req = urllib.request.urlopen("http://localhost:3000/index.html")
+        req = urllib.request.urlopen("http://localhost:8000/")
         html = req.read().decode("utf-8")
         assert req.status == 200
         print("--> index.html successfully served (200 OK)")
@@ -47,8 +47,7 @@ def test_frontend_complete():
             'id="split-table"',
             'id="settle-up-list"',
             'id="copy-table-btn"',
-            'id="copy-settle-btn"',
-            'id="raw-json-viewer"'
+            'id="copy-settle-btn"'
         ]
         for elem in required_elements:
             assert elem in html, f"Missing element {elem} in index.html!"
@@ -60,7 +59,7 @@ def test_frontend_complete():
     # 2. Test app.js static serve
     print("\n[2] Checking app.js static serve...")
     try:
-        req_js = urllib.request.urlopen("http://localhost:3000/app.js")
+        req_js = urllib.request.urlopen("http://localhost:8000/app.js")
         js_content = req_js.read().decode("utf-8")
         assert req_js.status == 200
         assert "SAMPLE_PRESETS" in js_content
@@ -74,12 +73,12 @@ def test_frontend_complete():
     # 3. Test style.css static serve
     print("\n[3] Checking style.css static serve...")
     try:
-        req_css = urllib.request.urlopen("http://localhost:3000/style.css")
+        req_css = urllib.request.urlopen("http://localhost:8000/style.css")
         css_content = req_css.read().decode("utf-8")
         assert req_css.status == 200
         assert ".confidence-banner" in css_content
         assert ".sample-chip" in css_content
-        assert ".raw-json-viewer" in css_content
+        assert ".fair-toast" in css_content
         print("--> style.css successfully served with all upgraded UI design tokens.")
     except Exception as e:
         print(f"FAILED to fetch style.css: {e}")

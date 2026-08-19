@@ -253,7 +253,7 @@ class LLMProvider:
                         system_instruction=VISION_SYSTEM_PROMPT,
                         temperature=0.1,
                         max_output_tokens=2500,
-                        http_options=types.HttpOptions(timeout=int(timeout_seconds * 1000))
+                        http_options=types.HttpOptions(timeout=int(max(timeout_seconds, 10.0) * 1000))
                     )
                 )
                 if response.text:
@@ -281,7 +281,7 @@ class LLMProvider:
                     ],
                     temperature=0.1,
                     max_tokens=2500,
-                    timeout=timeout_seconds + 3.0
+                    timeout=timeout_seconds + 5.0
                 )
                 if resp.choices and resp.choices[0].message.content:
                     return resp.choices[0].message.content or "", used_fallback, fallback_reason
@@ -368,7 +368,7 @@ class LLMProvider:
                         system_instruction=TEXT_SYSTEM_PROMPT,
                         temperature=0.1,
                         max_output_tokens=2500,
-                        http_options=types.HttpOptions(timeout=int(timeout_seconds * 1000))
+                        http_options=types.HttpOptions(timeout=int(max(timeout_seconds, 10.0) * 1000))
                     )
                 )
                 if response.text:
