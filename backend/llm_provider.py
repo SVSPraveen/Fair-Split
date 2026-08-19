@@ -19,8 +19,8 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-# Locked Model IDs
-GEMINI_VISION_PRIMARY = os.getenv("GEMINI_VISION_MODEL", "gemini-3.7-flash")
+# Locked Model IDs (100% Free-Tier High Quota Models)
+GEMINI_VISION_PRIMARY = os.getenv("GEMINI_VISION_MODEL", "gemini-3.6-flash")
 GROQ_TEXT_PRIMARY = os.getenv("GROQ_TEXT_MODEL", "openai/gpt-oss-120b")
 OPENROUTER_VISION_FALLBACK = os.getenv("OPENROUTER_VISION_MODEL", "google/gemma-4-26b-a4b-it:free")
 OPENROUTER_TEXT_FALLBACK = os.getenv("OPENROUTER_TEXT_MODEL", "nvidia/nemotron-3-super-120b-a12b:free")
@@ -186,7 +186,7 @@ class LLMProvider:
         Returns: (response_text, used_fallback_boolean, fallback_reason)
         """
         # Optimize image to keep token usage small (~1000 tokens) and prevent TPM limits
-        optimized_bytes = _optimize_image_for_ocr(image_bytes, max_dimension=800)
+        optimized_bytes = _optimize_image_for_ocr(image_bytes, max_dimension=640)
         base64_image = base64.b64encode(optimized_bytes).decode("utf-8")
         data_uri = f"data:image/jpeg;base64,{base64_image}"
 
@@ -200,53 +200,44 @@ class LLMProvider:
         # Tier 1 (Primary): Groq Vision (qwen/qwen3.6-27b)
         # -------------------------------------------------------------
         if not force_fallback and self._groq_client:
-            max_retries = 2
-            for attempt in range(max_retries + 1):
-                try:
-                    resp = self._groq_client.chat.completions.create(
-                        model="qwen/qwen3.6-27b",
-                        messages=[
-                            {"role": "system", "content": VISION_SYSTEM_PROMPT},
-                            {
-                                "role": "user",
-                                "content": [
-                                    {"type": "text", "text": prompt},
-                                    {"type": "image_url", "image_url": {"url": data_uri}}
-                                ]
-                            }
-                        ],
-                        temperature=0.0,
-                        max_tokens=4096,
-                        timeout=timeout_seconds
-                    )
-                    if resp.choices and resp.choices[0].message.content:
-                        return resp.choices[0].message.content, False, None
-                    raise ValueError("Groq vision returned empty response")
-                except Exception as e:
-                    err_str = str(e).lower()
-                    is_rate_limit = "429" in err_str or "quota" in err_str or "rate limit" in err_str
-                    if is_rate_limit and attempt < max_retries:
-                        match = re.search(r"try again in ([\d\.]+)s", err_str)
-                        delay = float(match.group(1)) + 0.5 if match else (2.0 * (attempt + 1))
-                        logger.warning(f"Groq vision 429 on attempt {attempt+1}. Retrying in {delay:.2f}s...")
-                        time.sleep(delay)
-                        continue
+            try:
+                resp = self._groq_client.chat.completions.create(
+                    model="qwen/qwen3.6-27b",
+                    messages=[
+                        {"role": "system", "content": VISION_SYSTEM_PROMPT},
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {"type": "image_url", "image_url": {"url": data_uri}}
+                            ]
+                        }
+                    ],
+                    temperature=0.0,
+                    max_tokens=4096,
+                    timeout=timeout_seconds
+                )
+                if resp.choices and resp.choices[0].message.content:
+                    return resp.choices[0].message.content, False, None
+                raise ValueError("Groq vision returned empty response")
+            except Exception as e:
+                err_str = str(e).lower()
+                is_rate_limit = "429" in err_str or "quota" in err_str or "rate limit" in err_str
+                is_timeout = (
+                    isinstance(e, (httpx.TimeoutException, groq.APITimeoutError, TimeoutError))
+                    or "timeout" in err_str
+                    or "timed out" in err_str
+                )
+                if is_timeout:
+                    fallback_reason = "timeout"
+                    logger.warning(f"Groq vision timed out after {int(timeout_seconds)}s, instantly falling back to Gemini.")
+                elif is_rate_limit:
+                    fallback_reason = "rate_limit_429"
+                    logger.warning("Groq vision 429 rate limit hit, instantly falling back to Gemini (0ms delay).")
+                else:
+                    fallback_reason = "error"
+                    logger.warning(f"Groq vision call failed ({e}). Instantly falling back to Gemini.")
 
-                    is_timeout = (
-                        isinstance(e, (httpx.TimeoutException, groq.APITimeoutError, TimeoutError))
-                        or "timeout" in err_str
-                        or "timed out" in err_str
-                    )
-                    if is_timeout:
-                        fallback_reason = "timeout"
-                        logger.warning(f"Groq vision timed out after {int(timeout_seconds)}s, falling back to Gemini.")
-                    elif is_rate_limit:
-                        fallback_reason = "rate_limit_429"
-                        logger.warning(f"Groq vision returned 429, falling back to Gemini.")
-                    else:
-                        fallback_reason = "error"
-                        logger.warning(f"Groq vision call failed ({e}). Falling back to Gemini.")
-                    break
 
         # -------------------------------------------------------------
         # Tier 2 (Secondary): Gemini 3.7 Flash
@@ -332,47 +323,38 @@ class LLMProvider:
         fallback_reason = None
 
         if not force_fallback and self._groq_client:
-            max_retries = 2
-            for attempt in range(max_retries + 1):
-                try:
-                    messages = []
-                    if system_prompt:
-                        messages.append({"role": "system", "content": system_prompt})
-                    messages.append({"role": "user", "content": prompt})
+            try:
+                messages = []
+                if system_prompt:
+                    messages.append({"role": "system", "content": system_prompt})
+                messages.append({"role": "user", "content": prompt})
 
-                    response = self._groq_client.chat.completions.create(
-                        model=GROQ_TEXT_PRIMARY,
-                        messages=messages,
-                        temperature=0.1,
-                        max_tokens=4096,
-                        timeout=timeout_seconds
-                    )
-                    return response.choices[0].message.content or "", False, None
-                except Exception as e:
-                    err_str = str(e).lower()
-                    is_rate_limit = "429" in err_str or "rate limit" in err_str or "quota" in err_str
-                    if is_rate_limit and attempt < max_retries:
-                        match = re.search(r"try again in ([\d\.]+)s", err_str)
-                        delay = float(match.group(1)) + 0.5 if match else (2.0 * (attempt + 1))
-                        logger.warning(f"Groq text 429 on attempt {attempt+1}. Retrying in {delay:.2f}s...")
-                        time.sleep(delay)
-                        continue
+                response = self._groq_client.chat.completions.create(
+                    model=GROQ_TEXT_PRIMARY,
+                    messages=messages,
+                    temperature=0.1,
+                    max_tokens=4096,
+                    timeout=timeout_seconds
+                )
+                return response.choices[0].message.content or "", False, None
+            except Exception as e:
+                err_str = str(e).lower()
+                is_rate_limit = "429" in err_str or "rate limit" in err_str or "quota" in err_str
+                is_timeout = (
+                    isinstance(e, (httpx.TimeoutException, groq.APITimeoutError, TimeoutError))
+                    or "timeout" in err_str
+                    or "timed out" in err_str
+                )
+                if is_timeout:
+                    fallback_reason = "timeout"
+                    logger.warning(f"Groq text timed out after {int(timeout_seconds)}s, instantly falling back to Gemini/OpenRouter.")
+                elif is_rate_limit:
+                    fallback_reason = "rate_limit_429"
+                    logger.warning("Groq text 429 rate limit hit, instantly falling back to Gemini/OpenRouter (0ms delay).")
+                else:
+                    fallback_reason = "error"
+                    logger.warning(f"Groq text call failed ({e}). Instantly attempting fallback.")
 
-                    is_timeout = (
-                        isinstance(e, (httpx.TimeoutException, groq.APITimeoutError, TimeoutError))
-                        or "timeout" in err_str
-                        or "timed out" in err_str
-                    )
-                    if is_timeout:
-                        fallback_reason = "timeout"
-                        logger.warning(f"Groq text timed out after {int(timeout_seconds)}s, falling back to OpenRouter.")
-                    elif is_rate_limit:
-                        fallback_reason = "rate_limit_429"
-                        logger.warning(f"Groq text returned 429, falling back to OpenRouter.")
-                    else:
-                        fallback_reason = "error"
-                        logger.warning(f"Groq text call failed ({e}). Attempting fallback.")
-                    break
 
         # Fallback Text: Try Gemini first, then OpenRouter
         used_fallback = True

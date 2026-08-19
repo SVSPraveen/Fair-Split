@@ -2,6 +2,7 @@ import os
 import json
 import re
 import hashlib
+import logging
 from typing import Optional, List, Dict, Any
 from dotenv import load_dotenv
 from pydantic import ValidationError
@@ -10,8 +11,8 @@ from backend.models import ReceiptData, ReceiptItem, DiscountDetail, TaxBreakdow
 from backend.llm_provider import get_vision_client
 from backend.guardrails import detect_hallucination_flags, sanitize_llm_string
 
-# Load environment variables (.env)
 load_dotenv()
+logger = logging.getLogger(__name__)
 
 PRIMARY_EXTRACTION_PROMPT = """You are an expert receipt and bill OCR assistant that handles ALL types of food bills:
 - Restaurant printed receipts (thermal, dot-matrix, printed A4/A5 invoices)
