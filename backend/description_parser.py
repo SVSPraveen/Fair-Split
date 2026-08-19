@@ -32,6 +32,9 @@ Required JSON Schema:
       "is_shared": true
     }}
   ],
+  "ignored_items": ["string"],
+  "tax_override": null,
+  "is_receipt_completely_wrong": false,
   "unmatched_mentions": ["string"],
   "unclear_references": ["string"],
   "parsing_assumptions": ["string"]
@@ -49,11 +52,14 @@ CRITICAL RULES:
    - TREAT / COVER / PAY FOR (CRITICAL): If person X says they will "pay for", "cover", "treat", or "sponsor" a specific item FOR person(s) Y and Z (who ate it), then the financial cost of that item falls on X — NOT on Y or Z. In this case, set consumed_by to [X] (the one covering the cost), NOT to the ones who ate it. Add a parsing_assumption like "Kavitha covers the lobster for Arjun, Meena, Priya — cost attributed to Kavitha". This correctly means Y and Z owe nothing for that dish, and X's total increases by the dish cost.
    - Examples of TREAT rule:
      * "Kavitha said she'll pay for the lobster for Arjun, Meena, and Priya" → consumed_by: ["Kavitha"]
-     * "Rohan is treating the table to dessert" → consumed_by: ["Rohan"]
+      * "Rohan is treating the table to dessert" → consumed_by: ["Rohan"]
      * "Dev covered Anjali's biryani" → biryani consumed_by: ["Dev"] (Anjali owes nothing for it)
-5. "unmatched_mentions": Only add if there is genuinely NO plausible match in Known Receipt Items.
-6. "unclear_references": Ambiguous phrases that cannot be confidently assigned. Never silently drop them.
-7. "parsing_assumptions": Document every inference (e.g. "tikka mapped to Chicken Tikka Starter", "2 of us interpreted as Arjun and Meena", "Kavitha covers lobster — cost attributed to Kavitha").
+5. "ignored_items": If the description explicitly states an item was NOT eaten, was erroneously added by the restaurant, or should NOT be paid for, list its Known Receipt Item name here.
+6. "tax_override": If the description states the tax was wrong and provides the correct numeric amount, set it here (as a float). Otherwise null.
+7. "is_receipt_completely_wrong": If the description implies this is the completely wrong receipt (e.g. description is about pizza, receipt is for coffee), set to true.
+8. "unmatched_mentions": Only add if there is genuinely NO plausible match in Known Receipt Items.
+9. "unclear_references": Ambiguous phrases that cannot be confidently assigned. Never silently drop them.
+10. "parsing_assumptions": Document every inference (e.g. "tikka mapped to Chicken Tikka", "burger added to ignored_items because of restaurant error").
 """
 
 
@@ -77,6 +83,9 @@ Required JSON Schema:
       "is_shared": true
     }}
   ],
+  "ignored_items": [],
+  "tax_override": null,
+  "is_receipt_completely_wrong": false,
   "unmatched_mentions": [],
   "unclear_references": [],
   "parsing_assumptions": []
@@ -84,7 +93,7 @@ Required JSON Schema:
 
 Rules:
 1. When description says "everything else was common to all", assign every remaining item from Known Receipt Items to all people in item_assignments.
-2. Ensure all list fields are arrays of strings/objects, payer is string or null, and output is strictly valid JSON without markdown commentary.
+2. Ensure all list fields are arrays of strings/objects, payer is string or null, tax_override is float or null, is_receipt_completely_wrong is boolean, and output is strictly valid JSON without markdown commentary.
 """
 
 

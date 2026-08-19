@@ -58,6 +58,17 @@ def _match_item_assignment(item_name: str, assignments: list) -> Optional[Any]:
 
 
 
+def _is_item_ignored(item_name: str, ignored_items: List[str]) -> bool:
+    """Fuzzy checks if a receipt item name matches any string in ignored_items."""
+    norm_item = _normalize(item_name)
+    for ig in ignored_items:
+        norm_ig = _normalize(ig)
+        if norm_item == norm_ig or norm_ig in norm_item or norm_item in norm_ig:
+            return True
+        if difflib.SequenceMatcher(None, norm_item, norm_ig).ratio() >= 0.72:
+            return True
+    return False
+
 def compute_split(
     receipt: ReceiptData,
     description: DescriptionData
@@ -75,6 +86,10 @@ def compute_split(
     """
     flags: List[str] = []
     assumptions: List[str] = []
+
+    # 0. Check for complete receipt mismatch
+    if description.is_receipt_completely_wrong:
+        raise ValueError("The provided receipt does not match the description at all. Please upload the correct receipt.")
 
     # 1. Forward flags and assumptions from prior pipeline stages
     if receipt.extraction_flags:
@@ -105,8 +120,15 @@ def compute_split(
     # 4. Allocate line items to consumers
     person_items_map: Dict[str, List[PersonItem]] = {p: [] for p in people}
     person_subtotals: Dict[str, float] = {p: 0.0 for p in people}
+    
+    deducted_ignored_amount = 0.0
 
     for item in receipt.items:
+        if description.ignored_items and _is_item_ignored(item.name, description.ignored_items):
+            deducted_ignored_amount += item.amount
+            assumptions.append(f"Excluded '{item.name}' (₹{item.amount:.2f}) based on description overrides.")
+            continue
+
         assignment = _match_item_assignment(item.name, description.item_assignments)
         if assignment and assignment.consumed_by:
             # Filter consumers that exist in group
@@ -144,7 +166,10 @@ def compute_split(
 
     # Determine total tax
     total_tax = 0.0
-    if receipt.tax:
+    if description.tax_override is not None:
+        total_tax = description.tax_override
+        assumptions.append(f"Tax explicitly overridden to ₹{total_tax:.2f} based on description.")
+    elif receipt.tax:
         if receipt.tax.total_tax is not None:
             total_tax = receipt.tax.total_tax
         else:
@@ -181,10 +206,9 @@ def compute_split(
         })
 
     # 6. Largest Remainder Method (LRM) Rounding
-    # Guarantees that integer-rounded person totals always sum to exactly grand_total.
-    # Standard Python round() can accumulate ±N/2 rupees of error for N people.
-    # LRM: floor everyone, then give 1 extra rupee to the N people with the largest remainders.
-    target_int = int(round(receipt.grand_total))
+    # Guarantees that integer-rounded person totals always sum to exactly grand_total (minus ignored items).
+    adjusted_grand_total = max(0.0, receipt.grand_total - deducted_ignored_amount)
+    target_int = int(round(adjusted_grand_total))
     floor_totals = [int(raw) for raw in raw_totals]
     remainders = [(raw - int(raw), i) for i, raw in enumerate(raw_totals)]
     deficit = target_int - sum(floor_totals)
@@ -199,9 +223,9 @@ def compute_split(
     for i, p in enumerate(per_person_data):
         p["total"] = float(lrm_totals[i])
 
-    # 6b. Reconciliation check after LRM \u2014 should be exact; flag if not
+    # 6b. Reconciliation check after LRM — should be exact; flag if not
     sum_lrm = sum(p["total"] for p in per_person_data)
-    lrm_diff = round(receipt.grand_total - sum_lrm, 2)
+    lrm_diff = round(adjusted_grand_total - sum_lrm, 2)
 
     payer_name = description.payer
     payer_matched = False
@@ -219,32 +243,21 @@ def compute_split(
         if abs(lrm_diff) > 0.001:
             flags.append(
                 f"Rounding residual of ₹{lrm_diff:+.2f} remains after LRM; "
-                f"sum of person totals is ₹{sum_lrm:.2f} vs bill grand total ₹{receipt.grand_total:.2f}."
+                f"sum of person totals is ₹{sum_lrm:.2f} vs bill adjusted grand total ₹{adjusted_grand_total:.2f}."
             )
 
 
-    # 7. Final PersonShare Construction & Reconciliation
-    per_person_final: List[PersonShare] = []
-    for p in per_person_data:
-        per_person_final.append(
-            PersonShare(
-                name=p["name"],
-                items=p["items"],
-                subtotal=p["subtotal"],
-                tax_share=p["tax_share"],
-                service_share=p["service_share"],
-                discount_share=p["discount_share"],
-                total=p["total"]
-            )
-        )
+    # 7. Reconciliation Validation
+    # We must match against the adjusted grand total
+    per_person_final = [PersonShare(**p) for p in per_person_data]
 
     final_sum_totals = sum(p.total for p in per_person_final)
-    matches_bill = abs(final_sum_totals - receipt.grand_total) <= 2.0
+    matches_bill = abs(final_sum_totals - adjusted_grand_total) <= 2.0
 
     if not matches_bill:
         flags.append(
             f"Reconciliation mismatch: sum of person totals (₹{final_sum_totals:.2f}) "
-            f"does not match grand total (₹{receipt.grand_total:.2f}) within ₹2.00 tolerance."
+            f"does not match adjusted grand total (₹{adjusted_grand_total:.2f}) within ₹2.00 tolerance."
         )
 
     reconciliation = ReconciliationDetail(
@@ -332,7 +345,7 @@ def compute_split(
 
     return SplitResult(
         per_person=per_person_final,
-        grand_total=receipt.grand_total,
+        grand_total=adjusted_grand_total,
         reconciliation=reconciliation,
         paid_by=resolved_paid_by,
         settle_up=settle_up,

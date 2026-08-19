@@ -229,6 +229,12 @@ def split_bill(request: Request, body: SplitRequest) -> SplitResult:
             receipt=receipt_data,
             description=description_data
         )
+    except ValueError as val_err:
+        logger.warning(f"[{request_id}] Computation rejected: {val_err}")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(val_err)
+        )
     except Exception as compute_err:
         logger.error(f"[{request_id}] Computation failed: {compute_err}", exc_info=True)
         raise HTTPException(

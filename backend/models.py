@@ -137,6 +137,9 @@ class DescriptionData(BaseModel):
     people: List[str] = Field(default_factory=list, description="List of all people in the dining group")
     payer: Optional[str] = Field(None, description="Name of the person who paid the bill, or null if not explicitly stated")
     item_assignments: List[ItemAssignment] = Field(default_factory=list, description="Mapping of line items to consumers")
+    ignored_items: List[str] = Field(default_factory=list, description="Items on receipt explicitly stated as erroneous or not to be paid for")
+    tax_override: Optional[float] = Field(None, description="Explicitly stated correct tax amount, overriding the receipt tax")
+    is_receipt_completely_wrong: bool = Field(default=False, description="True if description implies this is the wrong receipt entirely")
     unmatched_mentions: List[str] = Field(
         default_factory=list,
         description="Items mentioned in description that do not match any known receipt item"
