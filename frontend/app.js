@@ -275,18 +275,56 @@ form.addEventListener('submit', async (e) => {
     const responseData = await response.json();
 
     if (!response.ok) {
-      const errorDetail = responseData.detail || responseData.message || JSON.stringify(responseData);
-      throw new Error(errorDetail);
+      const rawDetail = responseData.detail || responseData.message || JSON.stringify(responseData);
+      throw new Error(_friendlyError(rawDetail, response.status));
     }
 
     lastSplitResponse = responseData;
     renderResults(responseData);
   } catch (err) {
-    showError(`Error (${err.message})`);
+    if (err.name === 'TypeError' && err.message.includes('fetch')) {
+      showError('Cannot reach the API server. Make sure the backend is running on ' + API_BASE_URL + ' and try again.');
+    } else {
+      showError(err.message);
+    }
   } finally {
     setLoading(false);
   }
 });
+
+/**
+ * Translates raw backend error messages into user-friendly, actionable text.
+ */
+function _friendlyError(detail, httpStatus) {
+  if (typeof detail !== 'string') detail = JSON.stringify(detail);
+
+  if (detail.includes('HEIC') || detail.includes('HEIF'))
+    return '📱 iPhone HEIC format detected. Go to Settings → Camera → Formats → "Most Compatible" to save as JPEG, then re-upload.';
+
+  if (detail.includes('too large') || detail.includes('20 MB'))
+    return '📁 The image is too large (over 20 MB). Please take a screenshot of the receipt or compress the image before uploading.';
+
+  if (detail.includes('does not appear to contain a bill') || detail.includes('No line items'))
+    return '🖼️ No receipt found in the image. Please upload a clear photo of your restaurant bill, grocery receipt, or hand-written menu.';
+
+  if (detail.includes('could not be read as an image'))
+    return '⚠️ The file appears corrupted or is not a valid image. Please re-export or re-screenshot the receipt and try again.';
+
+  if (detail.includes('timed out') || httpStatus === 504)
+    return '⏱️ The AI took too long to read the receipt (>15s). Please try again — if the receipt is very complex, try cropping to just the items and total.';
+
+  if (detail.includes('extraction failed') || detail.includes('parsing failed'))
+    return '🤖 The AI could not understand the receipt format. Please check the image is well-lit and not blurry, then try again.';
+
+  if (httpStatus === 429)
+    return '🚦 Too many requests. Please wait a few seconds and try again.';
+
+  if (httpStatus >= 500)
+    return `🔧 Server error (${httpStatus}). The backend encountered an unexpected problem — please try again in a moment.`;
+
+  return detail;
+}
+
 
 function setLoading(isLoading) {
   if (isLoading) {

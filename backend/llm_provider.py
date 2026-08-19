@@ -33,23 +33,65 @@ import re
 import time
 
 
+def validate_image_bytes(image_bytes: bytes) -> None:
+    """Pre-flight checks before sending image to OCR pipeline.
+    
+    Raises ValueError with a user-friendly message on:
+    - File too large (>20MB)
+    - HEIC/HEIF format (not supported without extra lib)
+    - Completely unreadable bytes (not a valid image)
+    """
+    # 1. Size guard — prevent memory exhaustion from huge RAW/DSLR photos
+    max_bytes = 20 * 1024 * 1024  # 20 MB
+    if len(image_bytes) > max_bytes:
+        raise ValueError(
+            f"Image file is too large ({len(image_bytes) / 1_048_576:.1f} MB). "
+            "Please upload a photo under 20 MB. Tip: screenshot the receipt instead of uploading a RAW file."
+        )
+
+    # 2. HEIC/HEIF detection — first 12 bytes contain 'heic' or 'heif' or 'mif1' or 'msf1'
+    header = image_bytes[:16].lower()
+    if any(sig in header for sig in [b'heic', b'heif', b'mif1', b'msf1']):
+        raise ValueError(
+            "HEIC/HEIF format (iPhone default) is not supported. "
+            "Please convert to JPEG or PNG: on iPhone, go to Settings → Camera → Formats → Most Compatible."
+        )
+
+    # 3. Attempt to open — catches completely corrupted/truncated files
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        img.verify()  # Verifies without decoding the full image
+    except Exception as e:
+        raise ValueError(
+            f"The uploaded file could not be read as an image ({type(e).__name__}). "
+            "Please try re-saving or re-exporting the receipt photo and upload again."
+        )
+
+
 def _optimize_image_for_ocr(image_bytes: bytes, max_dimension: int = 640) -> bytes:
     """Prepares an image for OCR:
-    - Converts RGBA/P to RGB
+    - Applies EXIF orientation correction (fixes sideways phone photos)
+    - Converts RGBA/P/grayscale to RGB
     - Auto-levels exposure (ImageOps.autocontrast) to handle faded/overexposed receipts
     - Applies a gentle unsharp-mask to bring out faded ink on torn/tape-repaired paper
-    - Boosts contrast by 1.4x so dim thermal prints are legible
+    - Boosts contrast by 1.35x so dim thermal prints are legible
     - Resizes to max_dimension keeping aspect ratio (LANCZOS)
     - Saves as JPEG quality=78 — enough clarity for OCR, small enough to stay under Groq TPM
     """
     try:
         img = Image.open(io.BytesIO(image_bytes))
 
-        # Convert palette / transparency modes
+        # Fix EXIF orientation — phone cameras store portrait shots as landscape
+        # with an EXIF rotation tag that most apps auto-apply on display.
+        # PIL does NOT auto-rotate, so we must do it explicitly.
+        img = ImageOps.exif_transpose(img)
+
+        # Convert palette / transparency / grayscale modes to RGB
         if img.mode in ("RGBA", "P"):
             img = img.convert("RGB")
         elif img.mode == "L":
-            # Grayscale — convert to RGB so JPEG works
+            img = img.convert("RGB")
+        elif img.mode not in ("RGB", "CMYK"):
             img = img.convert("RGB")
 
         # Auto-level: stretches the histogram so overexposed or underexposed
@@ -70,9 +112,16 @@ def _optimize_image_for_ocr(image_bytes: bytes, max_dimension: int = 640) -> byt
 
         out = io.BytesIO()
         img.save(out, format="JPEG", quality=78, optimize=True)
-        return out.getvalue()
-    except Exception:
-        # If any preprocessing step fails, return the original bytes unchanged
+        result = out.getvalue()
+
+        # Sanity check: output should be a valid JPEG (starts with FF D8)
+        if len(result) < 100 or result[:2] != b'\xff\xd8':
+            logger.warning("Preprocessed image failed JPEG sanity check; falling back to original bytes")
+            return image_bytes
+
+        return result
+    except Exception as e:
+        logger.warning(f"Image preprocessing failed ({type(e).__name__}: {e}); using original bytes")
         return image_bytes
 
 

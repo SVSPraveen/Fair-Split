@@ -11,6 +11,7 @@ from backend.models import SplitRequest, SplitResult
 from backend.extraction import extract_receipt
 from backend.description_parser import parse_description
 from backend.compute import compute_split
+from backend.llm_provider import validate_image_bytes
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -75,6 +76,15 @@ def split_bill(request: SplitRequest) -> SplitResult:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid base64 encoding for receipt image: {str(err)}"
+        )
+
+    # 1b. Pre-flight image validation (size, format, corruption)
+    try:
+        validate_image_bytes(image_bytes)
+    except ValueError as val_err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(val_err)
         )
 
     # 2. Receipt OCR & Structured Extraction

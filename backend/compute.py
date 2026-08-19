@@ -156,6 +156,7 @@ def compute_split(
 
     per_person_data: List[Dict[str, Any]] = []
 
+    raw_totals: List[float] = []
     for p in people:
         sub = person_subtotals[p]
         proportion = sub / grand_subtotal if grand_subtotal > 0 else (1.0 / len(people))
@@ -165,11 +166,8 @@ def compute_split(
         discount_share = round(proportion * total_discount, 2)
         round_off_share = proportion * total_round_off
 
-        # Raw calculated total before rounding
         raw_total = sub + (proportion * total_tax) + (proportion * total_service) - (proportion * total_discount) + round_off_share
-        
-        # Round every person's total independently first to nearest rupee
-        rounded_total = float(round(raw_total))
+        raw_totals.append(raw_total)
 
         per_person_data.append({
             "name": p,
@@ -179,12 +177,31 @@ def compute_split(
             "service_share": service_share,
             "discount_share": discount_share,
             "raw_total": raw_total,
-            "total": rounded_total
+            "total": 0.0  # Filled in by LRM below
         })
 
-    # 6. Payer Remainder Absorption (Payer-Only)
-    sum_of_rounded_totals = sum(p["total"] for p in per_person_data)
-    diff = round(receipt.grand_total - sum_of_rounded_totals, 2)
+    # 6. Largest Remainder Method (LRM) Rounding
+    # Guarantees that integer-rounded person totals always sum to exactly grand_total.
+    # Standard Python round() can accumulate ±N/2 rupees of error for N people.
+    # LRM: floor everyone, then give 1 extra rupee to the N people with the largest remainders.
+    target_int = int(round(receipt.grand_total))
+    floor_totals = [int(raw) for raw in raw_totals]
+    remainders = [(raw - int(raw), i) for i, raw in enumerate(raw_totals)]
+    deficit = target_int - sum(floor_totals)
+
+    # Sort by remainder descending; give extra rupee to top `deficit` people
+    remainders.sort(key=lambda x: x[0], reverse=True)
+    lrm_totals = floor_totals[:]
+    for k in range(max(0, int(deficit))):
+        if k < len(remainders):
+            lrm_totals[remainders[k][1]] += 1
+
+    for i, p in enumerate(per_person_data):
+        p["total"] = float(lrm_totals[i])
+
+    # 6b. Reconciliation check after LRM \u2014 should be exact; flag if not
+    sum_lrm = sum(p["total"] for p in per_person_data)
+    lrm_diff = round(receipt.grand_total - sum_lrm, 2)
 
     payer_name = description.payer
     payer_matched = False
@@ -193,21 +210,18 @@ def compute_split(
         for p in per_person_data:
             if p["name"].strip().lower() == payer_name.strip().lower():
                 payer_matched = True
-                p["total"] = float(round(p["total"] + diff))
-                if abs(diff) > 0.001:
-                    assumptions.append(
-                        f"Rounding discrepancy of ₹{diff:+.2f} absorbed by payer ({p['name']}) "
-                        f"to match bill grand total ₹{receipt.grand_total:.2f} exactly."
-                    )
+                if abs(lrm_diff) > 0.001:
+                    # LRM should have handled this; absorb any floating-point residual
+                    p["total"] = float(round(p["total"] + lrm_diff))
                 break
 
     if not payer_name or not payer_matched:
-        # Do not absorb remainder anywhere; report discrepancy
-        if abs(diff) > 0.001:
+        if abs(lrm_diff) > 0.001:
             flags.append(
-                f"No payer specified to absorb rounding discrepancy of ₹{diff:+.2f}; "
-                f"sum of person totals is ₹{sum_of_rounded_totals:.2f} vs bill grand total ₹{receipt.grand_total:.2f}."
+                f"Rounding residual of ₹{lrm_diff:+.2f} remains after LRM; "
+                f"sum of person totals is ₹{sum_lrm:.2f} vs bill grand total ₹{receipt.grand_total:.2f}."
             )
+
 
     # 7. Final PersonShare Construction & Reconciliation
     per_person_final: List[PersonShare] = []

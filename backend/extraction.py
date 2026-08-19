@@ -134,6 +134,28 @@ def _clean_and_parse_json(raw_text: str) -> Dict[str, Any]:
     return json.loads(cleaned)
 
 
+def _normalize_receipt_items(receipt: ReceiptData) -> None:
+    """Auto-heals common OCR extraction errors in-place before self-checks.
+    
+    Fixes:
+    1. unit_price=0 but amount>0 and qty>=1: infer unit_price = amount / qty
+    2. amount=0 but unit_price>0 and qty>=1: compute amount = unit_price * qty
+    3. qty=0: reset to 1.0 (no item has zero quantity)
+    """
+    for item in receipt.items:
+        # Fix zero qty
+        if item.qty == 0.0:
+            item.qty = 1.0
+
+        # Fix missing unit_price when amount is legible
+        if item.unit_price == 0.0 and item.amount > 0.0 and item.qty > 0.0:
+            item.unit_price = round(item.amount / item.qty, 2)
+
+        # Fix missing amount when unit_price is legible
+        if item.amount == 0.0 and item.unit_price > 0.0 and item.qty > 0.0:
+            item.amount = round(item.unit_price * item.qty, 2)
+
+
 def _run_self_checks(receipt: ReceiptData) -> List[str]:
     """Recomputes subtotal and grand total, checking against printed receipt values.
     
@@ -398,6 +420,7 @@ def extract_receipt(
         receipt = ReceiptData.model_validate(_SAMPLE_RECEIPTS_CACHE[image_hash])
         receipt.used_fallback = False
         receipt.fallback_reason = None
+        _normalize_receipt_items(receipt)
         receipt.extraction_flags = _run_self_checks(receipt)
         return receipt
 
@@ -465,6 +488,9 @@ def extract_receipt(
 
     receipt.used_fallback = used_fb
     receipt.fallback_reason = fb_reason
+
+    # Normalize OCR extraction errors before self-check
+    _normalize_receipt_items(receipt)
 
     # Run self-check validations
     flags = _run_self_checks(receipt)
