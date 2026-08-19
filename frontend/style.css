@@ -602,27 +602,33 @@ details[open] .guide-toggle-icon {
 
 /* Submit Button */
 .btn-primary {
-  background: linear-gradient(135deg, #4F46E5 0%, #4338CA 100%);
+  background: linear-gradient(135deg, #4F46E5 0%, #6366F1 50%, #4338CA 100%);
+  background-size: 200% auto;
   color: #FFFFFF;
   border: none;
   border-radius: var(--radius-lg);
-  padding: 14px 24px;
-  font-size: 15px;
-  font-weight: 700;
+  padding: 15px 26px;
+  font-size: 15.5px;
+  font-weight: 800;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
   width: 100%;
-  box-shadow: var(--shadow-btn);
-  transition: var(--transition);
+  box-shadow: 0 4px 18px rgba(79, 70, 229, 0.4), 0 0 0 1px rgba(99, 102, 241, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  letter-spacing: 0.2px;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #4338CA 0%, #3730A3 100%);
-  box-shadow: 0 6px 18px rgba(79, 70, 229, 0.45);
-  transform: translateY(-1px);
+  background-position: right center;
+  box-shadow: 0 8px 24px rgba(79, 70, 229, 0.55), 0 0 12px rgba(99, 102, 241, 0.6);
+  transform: translateY(-2px);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .btn-primary:disabled {
