@@ -830,16 +830,30 @@ shareWhatsAppBtn.addEventListener('click', () => {
     showToast('No settle-up transfers available.');
     return;
   }
-  let text = `🧾 *Fair-Split Bill Settlement*\n`;
-  text += `💰 *Total Bill:* ₹${lastSplitResponse.grand_total.toFixed(2)}\n`;
-  text += `💳 *Paid by:* ${lastSplitResponse.paid_by || 'Unknown'}\n\n`;
-  text += `*Direct Reimbursements:*\n`;
-  lastSplitResponse.settle_up.forEach(t => {
-    text += `👉 *${t.from}* pays *${t.to}*: ₹${t.amount.toFixed(2)}\n`;
-  });
-  text += `\n_Calculated with Fair-Split Engine_`;
 
-  const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+  const fmt = (n) => '₹' + Math.round(n).toLocaleString('en-IN');
+  const payer = lastSplitResponse.paid_by || 'Unknown';
+  const total = fmt(lastSplitResponse.grand_total);
+
+  let lines = [];
+  lines.push('🧾 *Fair-Split Bill Settlement*');
+  lines.push('━━━━━━━━━━━━━━━━━━━━');
+  lines.push('💰 *Total Bill:* ' + total);
+  lines.push('💳 *Paid by:* ' + payer);
+  lines.push('');
+  lines.push('📋 *Who Pays Whom:*');
+  lastSplitResponse.settle_up.forEach(t => {
+    const from = t.from_person || t['from'] || '?';
+    const to   = t.to_person   || t['to']   || '?';
+    const amt  = fmt(t.amount);
+    lines.push('👉 *' + from + '* → *' + to + '*: ' + amt);
+  });
+  lines.push('');
+  lines.push('━━━━━━━━━━━━━━━━━━━━');
+  lines.push('_Calculated with Fair-Split_ ✨');
+
+  const text = lines.join('\n');
+  const waUrl = 'https://api.whatsapp.com/send?text=' + encodeURIComponent(text);
   window.open(waUrl, '_blank');
   showToast('Opening WhatsApp... 📱');
 });
