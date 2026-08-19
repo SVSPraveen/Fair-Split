@@ -11,8 +11,16 @@ from backend.llm_provider import get_vision_client
 # Load environment variables (.env)
 load_dotenv()
 
-PRIMARY_EXTRACTION_PROMPT = """You are an expert receipt OCR and extraction assistant.
-Analyze the provided receipt image carefully and extract all information into a single JSON object.
+PRIMARY_EXTRACTION_PROMPT = """You are an expert receipt and bill OCR assistant that handles ALL types of food bills:
+- Restaurant printed receipts (thermal, dot-matrix, printed A4/A5 invoices)
+- Handwritten bills
+- Custom menus with prices listed
+- Grocery or food store receipts
+- Torn, folded, taped, partially legible, low-quality, or phone-camera photos
+- Hotel banquet invoices
+- Any document listing food/drink items with amounts
+
+Analyze the provided image and extract ALL visible pricing information into a JSON object.
 
 The JSON MUST strictly conform to this structure:
 {
@@ -43,14 +51,18 @@ The JSON MUST strictly conform to this structure:
 
 Rules:
 1. Return ONLY valid JSON wrapped in ```json ... ``` or directly as raw JSON.
-2. Extract all individual line items accurately with item name, quantity (qty), unit price (unit_price), and line amount (amount).
-3. If an item quantity is not explicitly shown, default qty to 1.0.
-4. Extract tax breakdowns (CGST, SGST, Total Tax) if present. If total tax is shown without CGST/SGST, set total_tax.
-5. If a discount is present, extract it as an object with "amount" (positive float) and "label" (e.g. "Happy Hour 10%"). If no discount, set discount to null.
-6. Extract service charge / tip if present (positive float); otherwise set to null.
-7. Extract round_off adjustment if present (+/- float); otherwise set to null.
-8. grand_total must be the final payable bill total (positive float).
-9. Do not fabricate values; read directly from the receipt image.
+2. Extract ALL individual line items: name, qty, unit_price, amount.
+   - If qty is not shown, default to 1.0.
+   - If unit_price cannot be determined but amount is visible, set unit_price = amount.
+3. For DAMAGED or PARTIALLY LEGIBLE images: do your best to read text even if torn, blurry, or taped.
+   Use context from surrounding text to infer partially obscured characters or prices.
+4. For CUSTOM MENUS or GROCERY LISTS: still extract items and prices into the same JSON format.
+   Set grand_total to sum of all item amounts if no explicit total is printed.
+5. If a field is absent or illegible, set it to null (not 0.0 — null means absent, 0.0 means explicitly zero).
+6. grand_total must be the final payable amount. If not printed, compute from items + tax + service - discount.
+7. Do NOT fabricate prices for items you cannot read. If an item name is visible but price is obscured, set unit_price and amount to 0.0 and note it.
+8. If the image contains NO food/drink items or pricing at all (e.g. it is a selfie, blank page, or completely unreadable), return:
+   {"restaurant_name": null, "bill_number": null, "items": [], "subtotal": 0.0, "discount": null, "service_charge": null, "tax": null, "round_off": null, "grand_total": 0.0}
 """
 
 STRICT_FALLBACK_PROMPT = """CRITICAL INSTRUCTION: Your previous response failed validation or JSON parsing.
@@ -433,6 +445,24 @@ def extract_receipt(
                 f"Raw response: {raw_response}"
             ) from retry_err
 
+    # Guard: Non-receipt / unreadable image detection
+    # If the model couldn't find any items AND no grand_total, the image is not a bill.
+    if not receipt.items and (receipt.grand_total is None or receipt.grand_total == 0.0):
+        raise ValueError(
+            "The uploaded image does not appear to contain a bill or receipt. "
+            "No line items or total amount could be extracted. "
+            "Please upload a clear photo of your restaurant bill, grocery receipt, or custom menu."
+        )
+
+    # If items exist but grand_total is missing, compute it from items
+    if receipt.grand_total == 0.0 and receipt.items:
+        computed_total = sum(i.amount for i in receipt.items)
+        tax_total = receipt.tax.total_tax if receipt.tax else 0.0
+        service = receipt.service_charge or 0.0
+        discount = receipt.discount.amount if receipt.discount else 0.0
+        receipt.grand_total = round(computed_total + (tax_total or 0.0) + service - discount, 2)
+        logger.info(f"grand_total was 0; auto-computed as ₹{receipt.grand_total} from items.")
+
     receipt.used_fallback = used_fb
     receipt.fallback_reason = fb_reason
 
@@ -444,4 +474,5 @@ def extract_receipt(
     _DYNAMIC_RECEIPT_CACHE[image_hash] = receipt.model_copy(deep=True)
 
     return receipt
+
 

@@ -12,7 +12,7 @@ import groq
 from groq import Groq
 import openai
 from openai import OpenAI
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
 load_dotenv()
 
@@ -34,20 +34,45 @@ import time
 
 
 def _optimize_image_for_ocr(image_bytes: bytes, max_dimension: int = 640) -> bytes:
-    """Resizes and compresses images to reduce token counts (<500 tokens) and prevent TPM limits."""
+    """Prepares an image for OCR:
+    - Converts RGBA/P to RGB
+    - Auto-levels exposure (ImageOps.autocontrast) to handle faded/overexposed receipts
+    - Applies a gentle unsharp-mask to bring out faded ink on torn/tape-repaired paper
+    - Boosts contrast by 1.4x so dim thermal prints are legible
+    - Resizes to max_dimension keeping aspect ratio (LANCZOS)
+    - Saves as JPEG quality=78 — enough clarity for OCR, small enough to stay under Groq TPM
+    """
     try:
         img = Image.open(io.BytesIO(image_bytes))
+
+        # Convert palette / transparency modes
         if img.mode in ("RGBA", "P"):
             img = img.convert("RGB")
+        elif img.mode == "L":
+            # Grayscale — convert to RGB so JPEG works
+            img = img.convert("RGB")
+
+        # Auto-level: stretches the histogram so overexposed or underexposed
+        # receipts (e.g. very white thermal paper or dark phone-camera shots) normalize
+        img = ImageOps.autocontrast(img, cutoff=1)
+
+        # Unsharp mask — sharpens faded or slightly out-of-focus text without noise
+        img = img.filter(ImageFilter.UnsharpMask(radius=1.5, percent=120, threshold=3))
+
+        # Contrast boost — makes low-contrast thermal printer ink stand out
+        img = ImageEnhance.Contrast(img).enhance(1.35)
+
+        # Resize to max_dimension if larger
         w, h = img.size
         if max(w, h) > max_dimension:
             scale = max_dimension / float(max(w, h))
-            new_size = (int(w * scale), int(h * scale))
-            img = img.resize(new_size, Image.Resampling.LANCZOS)
+            img = img.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
+
         out = io.BytesIO()
-        img.save(out, format="JPEG", quality=75, optimize=True)
+        img.save(out, format="JPEG", quality=78, optimize=True)
         return out.getvalue()
     except Exception:
+        # If any preprocessing step fails, return the original bytes unchanged
         return image_bytes
 
 

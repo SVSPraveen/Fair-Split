@@ -39,21 +39,17 @@ Required JSON Schema:
 CRITICAL RULES:
 1. Return ONLY valid JSON wrapped in ```json ... ``` or directly as raw JSON.
 2. "people": List all distinct individuals identified in the group.
-3. "payer": Identify who paid the bill. If the text does NOT explicitly state who paid, set "payer" to null. NEVER invent or guess a payer.
+3. "payer": Identify who paid. If NOT explicitly stated, set "payer" to null. NEVER invent or guess a payer.
 4. "item_assignments":
-   - For every known receipt item consumed by someone, list "item_name" (matching the exact name in Known Receipt Items), "consumed_by" (list of person names), and "is_shared" (true if consumed_by has 2 or more people, false if 1 person).
-   - If an item was consumed by a subset of people (e.g. "The Gulab Jamun was shared just by Priya and Karan"), list only those individuals in "consumed_by" and set "is_shared": true.
-   - EXPLICIT BLANKET / COMMON-TO-ALL STATEMENTS: When the description explicitly states that remaining or unmentioned items are common to everyone (using phrases like "everything else was common to all four", "the rest was shared by all of us", "all other items were shared equally"), you MUST generate an item_assignments entry for EVERY item in Known Receipt Items that was not otherwise specifically assigned, assigning it to ALL people in the group ("consumed_by": [all people], "is_shared": true).
-5. "unmatched_mentions":
-   - Cross-check every dish/item/drink mentioned in the description against Known Receipt Items.
-   - If something mentioned in the description does NOT match any known receipt item (e.g. description mentions "cheesecake" but it is not in Known Receipt Items), add it to "unmatched_mentions". Do NOT silently ignore it or force-match it.
-6. "unclear_references":
-   - Ambiguous phrases or references that cannot be confidently assigned (e.g. "the rest of us", "a drink", unclear who shared what).
-   - Never silently drop an ambiguous item — put it in "unclear_references".
-   - Only fall back to "unclear_references" for unassigned items when there is NO explicit blanket statement (like "everything else was common to all four"). If there IS an explicit blanket statement, assign all remaining known receipt items to everyone as per rule 4, and do NOT flag "everything else" as an unclear reference (leave unclear_references empty).
-7. "parsing_assumptions":
-   - Document any inference made during parsing (e.g. "'we' was interpreted as the 4 named individuals", "'sandwich' mapped to 'Veg Sandwich' in known items").
+   - Map every mentioned item to the closest name in Known Receipt Items.
+   - PARTIAL SHARING: If a subset of people shared an item (e.g. "Arjun and Meena shared the pizza", "2 of us had the beer"), list ONLY those individuals in consumed_by with is_shared: true. The split amount is divided equally among them automatically.
+   - BLANKET STATEMENTS: If description says "everything else was common to all" or similar, assign ALL remaining unassigned known items to ALL people.
+   - FUZZY MATCHING: Map abbreviated/informal mentions to the closest Known Receipt Item (e.g. "tikka" to "Chicken Tikka Starter", "naan" to "Garlic Naan"). Note the mapping in parsing_assumptions.
+5. "unmatched_mentions": Only add if there is genuinely NO plausible match in Known Receipt Items.
+6. "unclear_references": Ambiguous phrases that cannot be confidently assigned. Never silently drop them.
+7. "parsing_assumptions": Document every inference (e.g. "tikka mapped to Chicken Tikka Starter", "2 of us interpreted as Arjun and Meena").
 """
+
 
 STRICT_DESCRIPTION_RETRY_PROMPT_TEMPLATE = """CRITICAL INSTRUCTION: Your previous response failed schema validation or JSON decoding.
 You MUST return ONLY a strictly valid, parseable JSON object matching the DescriptionData schema.

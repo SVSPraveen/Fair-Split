@@ -1,4 +1,5 @@
 import math
+import difflib
 from typing import List, Dict, Optional, Any
 from backend.models import (
     ReceiptData,
@@ -13,14 +14,48 @@ from backend.models import (
 from backend.cross_check import cross_check_extraction_and_parsing
 
 
+def _normalize(s: str) -> str:
+    """Lowercase, strip punctuation and extra whitespace for comparison."""
+    import re
+    return re.sub(r"[^a-z0-9\s]", "", s.strip().lower())
+
+
 def _match_item_assignment(item_name: str, assignments: list) -> Optional[Any]:
-    """Matches a receipt item name to an assignment, using exact or normalized substring matching."""
-    norm_item = item_name.strip().lower()
+    """Matches a receipt item name to an assignment using multi-strategy fuzzy matching.
+    
+    Strategies (in order):
+    1. Exact normalized match
+    2. One string is a substring of the other (e.g. 'Chicken Tikka' in 'Chicken Tikka Starter')
+    3. difflib SequenceMatcher ratio >= 0.72 (handles typos, abbreviations, word order)
+    
+    Returns the best match or None.
+    """
+    norm_item = _normalize(item_name)
+    best_match = None
+    best_ratio = 0.0
+
     for assignment in assignments:
-        norm_assign = assignment.item_name.strip().lower()
-        if norm_item == norm_assign or norm_assign in norm_item or norm_item in norm_assign:
+        norm_assign = _normalize(assignment.item_name)
+
+        # Strategy 1: exact normalized match
+        if norm_item == norm_assign:
             return assignment
-    return None
+
+        # Strategy 2: substring containment (handles partial names like "Naan" vs "Garlic Naan")
+        if norm_assign in norm_item or norm_item in norm_assign:
+            ratio = len(min(norm_item, norm_assign, key=len)) / max(len(norm_item), len(norm_assign), 1)
+            if ratio > best_ratio:
+                best_ratio = ratio
+                best_match = assignment
+
+        # Strategy 3: fuzzy similarity
+        ratio = difflib.SequenceMatcher(None, norm_item, norm_assign).ratio()
+        if ratio >= 0.72 and ratio > best_ratio:
+            best_ratio = ratio
+            best_match = assignment
+
+    return best_match
+
 
 
 def compute_split(
