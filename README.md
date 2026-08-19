@@ -117,19 +117,29 @@ When running on free tiers, provider rate limits (e.g. Gemini 15 RPM) can occasi
 
 ---
 
-## 🎯 Preset Test Scenarios (R1 – R7)
+## 🎯 Preset Test Scenarios (R1 – R11)
 
-The application includes 7 real-world test scenarios pre-loaded as clickable chips in the UI:
+The application includes **11 real-world dining scenarios** pre-loaded as clickable chips in the UI:
 
+### Official Assignment Specifications (R1 – R4)
+| Preset | Venue Type | Key Complexity & Group Tested |
+|---|---|---|
+| **R1** | **Brew & Bite Café** (Bengaluru) | 3 diners (Ravi, Neha, Sameer) &bull; Itemized cafe dishes &bull; Sameer paid |
+| **R2** | **Tamarind Kitchen** (Bengaluru) | 4 diners (Aman, Priya, Karan, Sara) &bull; Partial sharing (Priya & Karan) &bull; Blanket sharing &bull; Priya paid |
+| **R3** | **The Daily Grind** (Mumbai) | 3 diners (Ishaan, Meera, Rohit) &bull; Equal sharing &bull; 2-person alcohol subset &bull; Rohit paid |
+| **R4** | **Spice Route** (Hyderabad) | 4 diners (Dev, Nikhil, Anjali, Farah) &bull; 15% WELCOME15 coupon &bull; Service charge &bull; Anjali paid |
+
+### Advanced Stress-Test & Hardened Benchmarks (R5 – R11)
 | Preset | Venue Type | Key Complexity Tested |
 |---|---|---|
-| **R1** | Filter & Brew Café | 2-person split, itemized breakfast, single payer |
-| **R2** | Spice Affair | 4-person Indian dining, multiple shared dishes, individual curries |
-| **R3** | Dosa Plaza | Fast-casual breakfast, combo meals, beverage sharing |
-| **R4** | Olive & Vine | 5-person fine dining, multi-course sharing, partial wine sharing |
-| **R5** | Sky High Lounge | Rooftop bar, per-person alcohol vs non-alcoholic beverages |
-| **R6** | Urban Brewery Feast | 6-person group, 10 items, multi-tax GST, bill discount, treat rules |
-| **R7** | The Grand Meridian Hotel | 8-person banquet, 19 items, dual-slab GST, ₹15,000 advance deposit |
+| **R5** | **Filter & Brew Cafe** | 2-person breakfast &bull; Single payer &bull; Thermal print layout |
+| **R6** | **Spice Affair** | 4-person Indian dining &bull; Multi-portion curries &bull; Shared naans & desserts |
+| **R7** | **Dosa Plaza** | 3-person South Indian QSR &bull; Multi-combo dishes &bull; Beverage sharing |
+| **R8** | **Olive & Vine** | 5-person fine dining &bull; Course-by-course sharing &bull; Wine sharing |
+| **R9** | **Sky High Lounge** | 5-person rooftop lounge &bull; Alcohol vs non-alcoholic split &bull; Bar snacks |
+| **R10** | **The Urban Brewery Feast** | 6-person group &bull; 10 items &bull; Multi-tax GST &bull; 15% discount &bull; Treat rule |
+| **R11** | **The Grand Meridian Hotel** | 8-person banquet &bull; 19 items &bull; Dual GST slabs &bull; ₹15,000 advance deposit |
+
 
 ---
 
