@@ -738,16 +738,10 @@ details[open] .guide-toggle-icon {
 .modal-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   padding: 14px 24px;
   border-top: 1px solid var(--border-color);
   background: #F8FAFC;
-  gap: 12px;
-}
-
-.modal-hint {
-  font-size: 12px;
-  color: var(--text-muted);
 }
 
 @keyframes modalFadeIn {
