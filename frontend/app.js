@@ -77,6 +77,12 @@ const SAMPLE_PRESETS = {
     imageFile: "samples/R11.png",
     filename: "R11_grand_meridian_banquet.png",
     title: "R11: Hotel Banquet (8p)"
+  },
+  R12: {
+    description: "We are four friends: Kabir, Tanya, Arjun, Sneha. We ate at Punjab Grill — 2 Butter Chickens, Dal Makhani, Garlic Naan, and Lassi. But the waiter handed us Table 9's bill by mistake which has Sushi and Ramen. This receipt is completely wrong and does not match our meal.",
+    imageFile: "samples/R12.png",
+    filename: "R12_mismatched_wrong_receipt.png",
+    title: "R12: ⚠️ Wrong Receipt / Table Mismatch (Error Catch Test)"
   }
 };
 

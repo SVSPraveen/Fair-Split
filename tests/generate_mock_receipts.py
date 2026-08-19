@@ -194,10 +194,42 @@ def generate_r5():
     render_receipt_image("R5.png", lines)
 
 
+def generate_r12():
+    """R12 — Sakura Sushi & Ramen House (Mismatched / Wrong Receipt Stress Test)."""
+    lines = [
+        "*** SAKURA SUSHI & RAMEN HOUSE ***",
+        "    Authentic Japanese Dining     ",
+        "  Indiranagar, Bengaluru - 560038  ",
+        "Date: 19-Aug-2026  Time: 21:40    ",
+        "Bill No: JPN-8802  Table: T-09    ",
+        "----------------------------------------",
+        "ITEM                  QTY  PRICE  AMOUNT",
+        "----------------------------------------",
+        "Salmon Sashimi (6pcs) 1.0 680.00  680.00",
+        "Dragon Roll Sushi     1.0 750.00  750.00",
+        "Tonkotsu Pork Ramen   1.0 580.00  580.00",
+        "Spicy Miso Ramen      1.0 540.00  540.00",
+        "Asahi Japanese Beer   1.0 450.00  450.00",
+        "Matcha Green Tea Ice  1.0 220.00  220.00",
+        "----------------------------------------",
+        "Subtotal:                       3,220.00",
+        "Service Charge (5%):              161.00",
+        "CGST (2.5%):                       84.53",
+        "SGST (2.5%):                       84.52",
+        "Round Off:                         -0.05",
+        "----------------------------------------",
+        "GRAND TOTAL:                    3,550.00",
+        "========================================",
+        "    Arigatou Gozaimasu! Visit Again!    ",
+    ]
+    render_receipt_image("R12.png", lines)
+
+
 if __name__ == "__main__":
     generate_r1()
     generate_r2()
     generate_r3()
     generate_r4()
     generate_r5()
-    print("All 5 mock receipts (including ground-truth R1-R4 and mismatch R5) generated successfully.")
+    generate_r12()
+    print("Mock receipts (including R1-R4, R5, and mismatch R12) generated successfully.")

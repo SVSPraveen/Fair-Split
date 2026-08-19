@@ -398,6 +398,24 @@ body {
   box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
 }
 
+.sample-chip.chip-warning {
+  border-color: #FCD34D;
+  background: #FFFBEB;
+  color: #B45309;
+}
+
+.sample-chip.chip-warning:hover {
+  background: #FEF3C7;
+  border-color: #F59E0B;
+}
+
+.sample-chip.chip-warning.active {
+  background-color: #D97706;
+  color: #FFFFFF;
+  border-color: #D97706;
+  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.3);
+}
+
 /* Dropzone */
 .form-group {
   display: flex;
