@@ -94,6 +94,7 @@ Required JSON Schema:
 Rules:
 1. When description says "everything else was common to all", assign every remaining item from Known Receipt Items to all people in item_assignments.
 2. Ensure all list fields are arrays of strings/objects, payer is string or null, tax_override is float or null, is_receipt_completely_wrong is boolean, and output is strictly valid JSON without markdown commentary.
+3. Do NOT output <think> tags or reasoning. Output ONLY the JSON object starting with {{ and ending with }}.
 """
 
 

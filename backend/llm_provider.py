@@ -20,14 +20,15 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 # Locked Model IDs (100% Free-Tier High Quota Models)
-GEMINI_VISION_PRIMARY = os.getenv("GEMINI_VISION_MODEL", "gemini-3.6-flash")
-GROQ_TEXT_PRIMARY = os.getenv("GROQ_TEXT_MODEL", "openai/gpt-oss-120b")
-OPENROUTER_VISION_FALLBACK = os.getenv("OPENROUTER_VISION_MODEL", "google/gemma-4-26b-a4b-it:free")
-OPENROUTER_TEXT_FALLBACK = os.getenv("OPENROUTER_TEXT_MODEL", "nvidia/nemotron-3-super-120b-a12b:free")
+GEMINI_MODELS = ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-flash-latest", "gemini-3.6-flash"]
+GROQ_TEXT_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b"]
+GROQ_VISION_MODELS = ["qwen/qwen3.6-27b", "openai/gpt-oss-120b"]
+OPENROUTER_VISION_MODELS = ["google/gemma-4-26b-a4b-it:free", "google/gemma-4-31b-it:free", "liquid/lfm-2.5-2.6b:free"]
+OPENROUTER_TEXT_MODELS = ["google/gemma-4-26b-a4b-it:free", "nvidia/nemotron-3-nano-30b-a3b:free", "liquid/lfm-2.5-2.6b:free"]
 
-# Hard Timeouts (5s for vision, 4s for text for sub-2s to 6s max responses)
-VISION_TIMEOUT_SECONDS: float = float(os.getenv("VISION_TIMEOUT_SECONDS", "5.0"))
-TEXT_TIMEOUT_SECONDS: float = float(os.getenv("TEXT_TIMEOUT_SECONDS", "4.0"))
+# Timeouts
+VISION_TIMEOUT_SECONDS: float = float(os.getenv("VISION_TIMEOUT_SECONDS", "12.0"))
+TEXT_TIMEOUT_SECONDS: float = float(os.getenv("TEXT_TIMEOUT_SECONDS", "10.0"))
 
 
 import re
@@ -197,99 +198,98 @@ class LLMProvider:
         # Tier 1 (Primary): Groq Vision (qwen/qwen3.6-27b)
         # -------------------------------------------------------------
         if not force_fallback and self._groq_client:
-            try:
-                resp = self._groq_client.chat.completions.create(
-                    model="qwen/qwen3.6-27b",
-                    messages=[
-                        {"role": "system", "content": VISION_SYSTEM_PROMPT},
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": prompt},
-                                {"type": "image_url", "image_url": {"url": data_uri}}
-                            ]
-                        }
-                    ],
-                    temperature=0.0,
-                    max_tokens=2500,
-                    timeout=timeout_seconds
-                )
-                if resp.choices and resp.choices[0].message.content:
-                    return resp.choices[0].message.content, False, None
-                raise ValueError("Groq vision returned empty response")
-            except Exception as e:
-                err_str = str(e).lower()
-                is_rate_limit = "429" in err_str or "quota" in err_str or "rate limit" in err_str
-                is_timeout = (
-                    isinstance(e, (httpx.TimeoutException, groq.APITimeoutError, TimeoutError))
-                    or "timeout" in err_str
-                    or "timed out" in err_str
-                )
-                if is_timeout:
-                    fallback_reason = "timeout"
-                    logger.warning(f"Groq vision timed out after {int(timeout_seconds)}s, instantly falling back to Gemini.")
-                elif is_rate_limit:
-                    fallback_reason = "rate_limit_429"
-                    logger.warning("Groq vision 429 rate limit hit, instantly falling back to Gemini (0ms delay).")
-                else:
-                    fallback_reason = "error"
-                    logger.warning(f"Groq vision call failed ({e}). Instantly falling back to Gemini.")
-
+            for model_name in GROQ_VISION_MODELS:
+                try:
+                    resp = self._groq_client.chat.completions.create(
+                        model=model_name,
+                        messages=[
+                            {"role": "system", "content": VISION_SYSTEM_PROMPT},
+                            {
+                                "role": "user",
+                                "content": [
+                                    {"type": "text", "text": prompt},
+                                    {"type": "image_url", "image_url": {"url": data_uri}}
+                                ]
+                            }
+                        ],
+                        temperature=0.0,
+                        max_tokens=2500,
+                        timeout=timeout_seconds
+                    )
+                    if resp.choices and resp.choices[0].message.content:
+                        return resp.choices[0].message.content, False, None
+                except Exception as e:
+                    err_str = str(e).lower()
+                    is_rate_limit = "429" in err_str or "quota" in err_str or "rate limit" in err_str
+                    is_timeout = (
+                        isinstance(e, (httpx.TimeoutException, groq.APITimeoutError, TimeoutError))
+                        or "timeout" in err_str
+                        or "timed out" in err_str
+                    )
+                    if is_timeout:
+                        fallback_reason = "timeout"
+                        logger.warning(f"Groq vision ({model_name}) timed out after {int(timeout_seconds)}s.")
+                    elif is_rate_limit:
+                        fallback_reason = "rate_limit_429"
+                        logger.warning(f"Groq vision ({model_name}) 429 rate limit hit.")
+                    else:
+                        fallback_reason = "error"
+                        logger.warning(f"Groq vision ({model_name}) failed: {e}")
 
         used_fallback = True
         if fallback_reason is None:
             fallback_reason = "forced_fallback" if force_fallback else "primary_unavailable"
 
         # -------------------------------------------------------------
-        # Tier 2 (Secondary): Gemini Vision (gemini-3.6-flash)
+        # Tier 2 (Secondary): Gemini Vision (Multi-model failover)
         # -------------------------------------------------------------
         if self._gemini_client:
-            try:
-                img = Image.open(io.BytesIO(optimized_bytes))
-                response = self._gemini_client.models.generate_content(
-                    model=GEMINI_VISION_PRIMARY,
-                    contents=[img, prompt],
-                    config=types.GenerateContentConfig(
-                        system_instruction=VISION_SYSTEM_PROMPT,
-                        temperature=0.1,
-                        max_output_tokens=2500,
-                        http_options=types.HttpOptions(timeout=int(max(timeout_seconds, 10.0) * 1000))
+            img = Image.open(io.BytesIO(optimized_bytes))
+            for model_name in GEMINI_MODELS:
+                try:
+                    response = self._gemini_client.models.generate_content(
+                        model=model_name,
+                        contents=[img, prompt],
+                        config=types.GenerateContentConfig(
+                            system_instruction=VISION_SYSTEM_PROMPT,
+                            temperature=0.1,
+                            max_output_tokens=2500,
+                            http_options=types.HttpOptions(timeout=int(max(timeout_seconds, 12.0) * 1000))
+                        )
                     )
-                )
-                if response.text:
-                    return response.text, used_fallback, fallback_reason
-                raise ValueError("Gemini returned empty response text")
-            except Exception as gemini_err:
-                logger.warning(f"Gemini vision fallback failed ({gemini_err}), instantly falling back to OpenRouter.")
+                    if response.text:
+                        return response.text, used_fallback, fallback_reason
+                except Exception as gemini_err:
+                    logger.warning(f"Gemini vision ({model_name}) failed: {gemini_err}")
 
         # -------------------------------------------------------------
-        # Tier 3 (Tertiary): OpenRouter Vision (google/gemma-4-26b-a4b-it:free)
+        # Tier 3 (Tertiary): OpenRouter Vision
         # -------------------------------------------------------------
         if self._openrouter_client:
-            try:
-                resp = self._openrouter_client.chat.completions.create(
-                    model=OPENROUTER_VISION_FALLBACK,
-                    messages=[
-                        {"role": "system", "content": VISION_SYSTEM_PROMPT},
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": prompt},
-                                {"type": "image_url", "image_url": {"url": data_uri}}
-                            ]
-                        }
-                    ],
-                    temperature=0.1,
-                    max_tokens=2500,
-                    timeout=timeout_seconds + 5.0
-                )
-                if resp.choices and resp.choices[0].message.content:
-                    return resp.choices[0].message.content or "", used_fallback, fallback_reason
-            except Exception as or_err:
-                logger.error(f"OpenRouter vision fallback failed ({or_err}). All vision providers exhausted.")
-                raise TimeoutError("All vision providers exhausted.") from or_err
+            for model_name in OPENROUTER_VISION_MODELS:
+                try:
+                    resp = self._openrouter_client.chat.completions.create(
+                        model=model_name,
+                        messages=[
+                            {"role": "system", "content": VISION_SYSTEM_PROMPT},
+                            {
+                                "role": "user",
+                                "content": [
+                                    {"type": "text", "text": prompt},
+                                    {"type": "image_url", "image_url": {"url": data_uri}}
+                                ]
+                            }
+                        ],
+                        temperature=0.1,
+                        max_tokens=2500,
+                        timeout=timeout_seconds + 5.0
+                    )
+                    if resp.choices and resp.choices[0].message.content:
+                        return resp.choices[0].message.content or "", used_fallback, fallback_reason
+                except Exception as or_err:
+                    logger.warning(f"OpenRouter vision ({model_name}) failed: {or_err}")
 
-        raise ValueError("No fallback vision client available (all providers exhausted).")
+        raise TimeoutError("All vision providers exhausted.")
 
     def generate_text(
         self,
@@ -315,90 +315,93 @@ class LLMProvider:
         fallback_reason = None
 
         # -------------------------------------------------------------
-        # Tier 1 (Primary): Groq Text (openai/gpt-oss-120b)
+        # Tier 1 (Primary): Groq Text (Multi-model failover)
         # -------------------------------------------------------------
         if not force_fallback and self._groq_client:
-            try:
-                messages = []
-                if system_prompt:
-                    messages.append({"role": "system", "content": system_prompt})
-                messages.append({"role": "user", "content": prompt})
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": prompt})
 
-                response = self._groq_client.chat.completions.create(
-                    model=GROQ_TEXT_PRIMARY,
-                    messages=messages,
-                    temperature=0.1,
-                    max_tokens=2500,
-                    timeout=timeout_seconds
-                )
-                return response.choices[0].message.content or "", False, None
-            except Exception as e:
-                err_str = str(e).lower()
-                is_rate_limit = "429" in err_str or "rate limit" in err_str or "quota" in err_str
-                is_timeout = (
-                    isinstance(e, (httpx.TimeoutException, groq.APITimeoutError, TimeoutError))
-                    or "timeout" in err_str
-                    or "timed out" in err_str
-                )
-                if is_timeout:
-                    fallback_reason = "timeout"
-                    logger.warning(f"Groq text timed out after {int(timeout_seconds)}s, instantly falling back to Gemini.")
-                elif is_rate_limit:
-                    fallback_reason = "rate_limit_429"
-                    logger.warning("Groq text 429 rate limit hit, instantly falling back to Gemini (0ms delay).")
-                else:
-                    fallback_reason = "error"
-                    logger.warning(f"Groq text call failed ({e}). Instantly attempting fallback.")
-
+            for model_name in GROQ_TEXT_MODELS:
+                try:
+                    response = self._groq_client.chat.completions.create(
+                        model=model_name,
+                        messages=messages,
+                        temperature=0.0,
+                        max_tokens=4096,
+                        timeout=timeout_seconds
+                    )
+                    if response.choices and response.choices[0].message.content:
+                        return response.choices[0].message.content or "", False, None
+                except Exception as e:
+                    err_str = str(e).lower()
+                    is_rate_limit = "429" in err_str or "rate limit" in err_str or "quota" in err_str
+                    is_timeout = (
+                        isinstance(e, (httpx.TimeoutException, groq.APITimeoutError, TimeoutError))
+                        or "timeout" in err_str
+                        or "timed out" in err_str
+                    )
+                    if is_timeout:
+                        fallback_reason = "timeout"
+                        logger.warning(f"Groq text ({model_name}) timed out after {int(timeout_seconds)}s.")
+                    elif is_rate_limit:
+                        fallback_reason = "rate_limit_429"
+                        logger.warning(f"Groq text ({model_name}) 429 rate limit hit.")
+                    else:
+                        fallback_reason = "error"
+                        logger.warning(f"Groq text ({model_name}) failed: {e}")
 
         used_fallback = True
         if fallback_reason is None:
             fallback_reason = "forced_fallback" if force_fallback else "primary_unavailable"
 
         # -------------------------------------------------------------
-        # Tier 2 (Secondary): Gemini Text (gemini-3.6-flash)
+        # Tier 2 (Secondary): Gemini Text (Multi-model failover)
         # -------------------------------------------------------------
         if self._gemini_client:
-            try:
-                full_prompt = f"{TEXT_SYSTEM_PROMPT}\n\n{prompt}" if not system_prompt else f"{system_prompt}\n\n{prompt}"
-                response = self._gemini_client.models.generate_content(
-                    model=GEMINI_VISION_PRIMARY,
-                    contents=full_prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=TEXT_SYSTEM_PROMPT,
-                        temperature=0.1,
-                        max_output_tokens=2500,
-                        http_options=types.HttpOptions(timeout=int(max(timeout_seconds, 10.0) * 1000))
+            full_prompt = f"{TEXT_SYSTEM_PROMPT}\n\n{prompt}" if not system_prompt else f"{system_prompt}\n\n{prompt}"
+            for model_name in GEMINI_MODELS:
+                try:
+                    response = self._gemini_client.models.generate_content(
+                        model=model_name,
+                        contents=full_prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=TEXT_SYSTEM_PROMPT,
+                            temperature=0.0,
+                            max_output_tokens=4096,
+                            http_options=types.HttpOptions(timeout=int(max(timeout_seconds, 12.0) * 1000))
+                        )
                     )
-                )
-                if response.text:
-                    return response.text, used_fallback, fallback_reason
-            except Exception as gemini_err:
-                logger.warning(f"Gemini text fallback failed ({gemini_err}), instantly falling back to OpenRouter.")
+                    if response.text:
+                        return response.text, used_fallback, fallback_reason
+                except Exception as gemini_err:
+                    logger.warning(f"Gemini text ({model_name}) failed: {gemini_err}")
 
         # -------------------------------------------------------------
-        # Tier 3 (Tertiary): OpenRouter Text (nvidia/nemotron-3-super-120b-a12b:free)
+        # Tier 3 (Tertiary): OpenRouter Text
         # -------------------------------------------------------------
         if self._openrouter_client:
-            try:
-                messages = []
-                if system_prompt:
-                    messages.append({"role": "system", "content": system_prompt})
-                messages.append({"role": "user", "content": prompt})
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": prompt})
 
-                response = self._openrouter_client.chat.completions.create(
-                    model=OPENROUTER_TEXT_FALLBACK,
-                    messages=messages,
-                    temperature=0.1,
-                    max_tokens=2500,
-                    timeout=timeout_seconds + 3.0
-                )
-                return response.choices[0].message.content or "", used_fallback, fallback_reason
-            except Exception as or_err:
-                logger.error(f"OpenRouter text fallback failed ({or_err}). All text providers exhausted.")
-                raise TimeoutError("All text providers exhausted.") from or_err
+            for model_name in OPENROUTER_TEXT_MODELS:
+                try:
+                    response = self._openrouter_client.chat.completions.create(
+                        model=model_name,
+                        messages=messages,
+                        temperature=0.0,
+                        max_tokens=4096,
+                        timeout=timeout_seconds + 3.0
+                    )
+                    if response.choices and response.choices[0].message.content:
+                        return response.choices[0].message.content or "", used_fallback, fallback_reason
+                except Exception as or_err:
+                    logger.warning(f"OpenRouter text ({model_name}) failed: {or_err}")
 
-        raise ValueError("No fallback text client available (all text providers exhausted).")
+        raise TimeoutError("All text providers exhausted.")
 
         messages = []
         if system_prompt:
