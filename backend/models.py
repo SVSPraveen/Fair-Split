@@ -1,6 +1,6 @@
 import re
 from typing import List, Optional, Union, Any
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 
 def _parse_float(val: Any) -> Optional[float]:
@@ -166,45 +166,37 @@ class PersonItem(BaseModel):
 
 class PersonShare(BaseModel):
     name: str = Field(..., description="Person's name")
-    items: List[PersonItem] = Field(default_factory=list, description="Items consumed by this person with split amount")
-    subtotal: float = Field(..., description="Sum of individual item shares before tax/service/discount")
-    tax_share: float = Field(..., description="Proportional share of GST / taxes")
-    service_share: float = Field(..., description="Proportional share of service charge")
-    discount_share: float = Field(..., description="Proportional share of discounts")
-    total: float = Field(..., description="Final individual total amount payable (rounded to nearest rupee)")
+    items: List[str] = Field(default_factory=list, description="List of item names consumed by this person")
+    subtotal: int = Field(..., description="Sum of individual item shares before tax/service/discount in integer rupees")
+    tax_share: int = Field(..., description="Proportional share of GST / taxes in integer rupees")
+    service_share: int = Field(..., description="Proportional share of service charge in integer rupees")
+    discount_share: int = Field(..., description="Proportional share of discounts in integer rupees")
+    total: int = Field(..., description="Final individual total amount payable in integer rupees")
 
 
 class ReconciliationDetail(BaseModel):
-    sum_of_person_totals: float = Field(..., description="Sum of all individual person totals")
+    sum_of_person_totals: int = Field(..., description="Sum of all individual person totals in integer rupees")
     matches_bill: bool = Field(..., description="True if sum of person totals matches grand total within tolerance")
 
 
 class SettleUpTransaction(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     from_person: str = Field(..., alias="from", description="Person who owes money")
     to_person: str = Field(..., alias="to", description="Person to be reimbursed (payer)")
-    amount: float = Field(..., description="Amount to transfer (rounded to nearest rupee)")
-
-    class Config:
-        populate_by_name = True
-
-
-class ConfidenceDetail(BaseModel):
-    level: str = Field(..., description="Overall confidence level: 'high' or 'needs_review'")
-    reasons: List[str] = Field(default_factory=list, description="Specific audit reasons when confidence is 'needs_review'")
+    amount: int = Field(..., description="Amount to transfer in integer rupees")
 
 
 class SplitResult(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     per_person: List[PersonShare] = Field(default_factory=list, description="Breakdown per person")
-    grand_total: float = Field(..., description="Grand total from the receipt")
+    grand_total: int = Field(..., description="Grand total from the receipt in integer rupees")
     reconciliation: ReconciliationDetail = Field(..., description="Reconciliation check against receipt total")
     paid_by: Optional[str] = Field(None, description="Payer name if specified")
     settle_up: List[SettleUpTransaction] = Field(default_factory=list, description="Settle-up transfer instructions")
     assumptions: List[str] = Field(default_factory=list, description="Assumptions and rounding allocations made")
     flags: List[str] = Field(default_factory=list, description="Reconciliation or parsing warning flags")
-    confidence: ConfidenceDetail = Field(..., description="Anti-hallucination confidence score ('high' vs 'needs_review')")
-
-    class Config:
-        populate_by_name = True
 
 
 class SplitRequest(BaseModel):

@@ -618,11 +618,16 @@ function renderResults(data) {
     const isPayer = payer && person.name.trim().toLowerCase() === payer;
     if (isPayer) tr.className = 'is-payer-row';
 
-    const itemsHtml = person.items.map(item => `
-      <span class="item-badge ${item.is_shared ? 'shared' : ''}">
-        ${escapeHtml(item.name)} (₹${item.amount.toFixed(2)}${item.is_shared ? ' - shared' : ''})
-      </span>
-    `).join('');
+    const itemsHtml = person.items.map(item => {
+      if (typeof item === 'string') {
+        return `<span class="item-badge">${escapeHtml(item)}</span>`;
+      }
+      return `
+        <span class="item-badge ${item.is_shared ? 'shared' : ''}">
+          ${escapeHtml(item.name || item)} (₹${(item.amount || 0).toFixed(0)}${item.is_shared ? ' - shared' : ''})
+        </span>
+      `;
+    }).join('');
 
     tr.innerHTML = `
       <td>
@@ -630,11 +635,11 @@ function renderResults(data) {
         ${isPayer ? '<span class="payer-badge">Payer</span>' : ''}
       </td>
       <td><div class="item-badge-list">${itemsHtml}</div></td>
-      <td class="num-col">₹${person.subtotal.toFixed(2)}</td>
-      <td class="num-col">₹${person.tax_share.toFixed(2)}</td>
-      <td class="num-col">₹${person.service_share.toFixed(2)}</td>
-      <td class="num-col">${person.discount_share > 0 ? '-₹' + person.discount_share.toFixed(2) : '₹0.00'}</td>
-      <td class="num-col total-col">₹${person.total.toFixed(2)}</td>
+      <td class="num-col">₹${person.subtotal.toLocaleString('en-IN')}</td>
+      <td class="num-col">₹${person.tax_share.toLocaleString('en-IN')}</td>
+      <td class="num-col">₹${person.service_share.toLocaleString('en-IN')}</td>
+      <td class="num-col">${person.discount_share > 0 ? '-₹' + person.discount_share.toLocaleString('en-IN') : '₹0'}</td>
+      <td class="num-col total-col">₹${person.total.toLocaleString('en-IN')}</td>
     `;
     splitTableBody.appendChild(tr);
   });

@@ -310,7 +310,7 @@ def split_bill(request: Request, body: SplitRequest) -> SplitResult:
         f"[{request_id}] Split complete: "
         f"grand_total=₹{receipt_data.grand_total:.2f} "
         f"people={len(split_result.per_person)} "
-        f"confidence={split_result.confidence.level} "
+        f"flags={len(split_result.flags)} "
         f"partial_extraction={receipt_data.partial_extraction} "
         f"used_fallback={receipt_data.used_fallback}"
     )

@@ -6,10 +6,8 @@ from backend.models import (
     DescriptionData,
     SplitResult,
     PersonShare,
-    PersonItem,
     ReconciliationDetail,
-    SettleUpTransaction,
-    ConfidenceDetail
+    SettleUpTransaction
 )
 from backend.cross_check import cross_check_extraction_and_parsing
 
@@ -150,13 +148,7 @@ def compute_split(
         split_amount = item.amount / num_consumers
 
         for c in consumers:
-            person_items_map[c].append(
-                PersonItem(
-                    name=item.name,
-                    amount=round(split_amount, 2),
-                    is_shared=is_shared
-                )
-            )
+            person_items_map[c].append(item.name)
             person_subtotals[c] += split_amount
 
     # 5. Proportional Tax, Service Charge, Discount, and Round-Off Allocation
@@ -186,9 +178,9 @@ def compute_split(
         sub = person_subtotals[p]
         proportion = sub / grand_subtotal if grand_subtotal > 0 else (1.0 / len(people))
 
-        tax_share = round(proportion * total_tax, 2)
-        service_share = round(proportion * total_service, 2)
-        discount_share = round(proportion * total_discount, 2)
+        tax_share = int(round(proportion * total_tax))
+        service_share = int(round(proportion * total_service))
+        discount_share = int(round(proportion * total_discount))
         round_off_share = proportion * total_round_off
 
         raw_total = sub + (proportion * total_tax) + (proportion * total_service) - (proportion * total_discount) + round_off_share
@@ -197,12 +189,12 @@ def compute_split(
         per_person_data.append({
             "name": p,
             "items": person_items_map[p],
-            "subtotal": round(sub, 2),
+            "subtotal": int(round(sub)),
             "tax_share": tax_share,
             "service_share": service_share,
             "discount_share": discount_share,
             "raw_total": raw_total,
-            "total": 0.0  # Filled in by LRM below
+            "total": 0  # Filled in by LRM below
         })
 
     # 6. Largest Remainder Method (LRM) Rounding
@@ -221,11 +213,11 @@ def compute_split(
             lrm_totals[remainders[k][1]] += 1
 
     for i, p in enumerate(per_person_data):
-        p["total"] = float(lrm_totals[i])
+        p["total"] = int(lrm_totals[i])
 
     # 6b. Reconciliation check after LRM — should be exact; flag if not
     sum_lrm = sum(p["total"] for p in per_person_data)
-    lrm_diff = round(adjusted_grand_total - sum_lrm, 2)
+    lrm_diff = target_int - sum_lrm
 
     payer_name = description.payer
     payer_matched = False
@@ -234,16 +226,16 @@ def compute_split(
         for p in per_person_data:
             if p["name"].strip().lower() == payer_name.strip().lower():
                 payer_matched = True
-                if abs(lrm_diff) > 0.001:
-                    # LRM should have handled this; absorb any floating-point residual
-                    p["total"] = float(round(p["total"] + lrm_diff))
+                if lrm_diff != 0:
+                    # LRM should have handled this; absorb any integer residual
+                    p["total"] = int(p["total"] + lrm_diff)
                 break
 
     if not payer_name or not payer_matched:
-        if abs(lrm_diff) > 0.001:
+        if lrm_diff != 0:
             flags.append(
-                f"Rounding residual of ₹{lrm_diff:+.2f} remains after LRM; "
-                f"sum of person totals is ₹{sum_lrm:.2f} vs bill adjusted grand total ₹{adjusted_grand_total:.2f}."
+                f"Rounding residual of ₹{lrm_diff:+d} remains after LRM; "
+                f"sum of person totals is ₹{sum_lrm} vs bill adjusted grand total ₹{target_int}."
             )
 
 
@@ -252,16 +244,16 @@ def compute_split(
     per_person_final = [PersonShare(**p) for p in per_person_data]
 
     final_sum_totals = sum(p.total for p in per_person_final)
-    matches_bill = abs(final_sum_totals - adjusted_grand_total) <= 2.0
+    matches_bill = (final_sum_totals == target_int)
 
     if not matches_bill:
         flags.append(
-            f"Reconciliation mismatch: sum of person totals (₹{final_sum_totals:.2f}) "
-            f"does not match adjusted grand total (₹{adjusted_grand_total:.2f}) within ₹2.00 tolerance."
+            f"Reconciliation mismatch: sum of person totals (₹{final_sum_totals}) "
+            f"does not match adjusted grand total (₹{target_int})."
         )
 
     reconciliation = ReconciliationDetail(
-        sum_of_person_totals=final_sum_totals,
+        sum_of_person_totals=int(final_sum_totals),
         matches_bill=matches_bill
     )
 
@@ -279,7 +271,7 @@ def compute_split(
                     SettleUpTransaction(
                         from_person=p.name,
                         to_person=actual_payer_name,
-                        amount=p.total
+                        amount=int(p.total)
                     )
                 )
         assumptions.append(
@@ -288,69 +280,13 @@ def compute_split(
     else:
         flags.append("Payer not specified in description. Settle-up transactions cannot be computed.")
 
-    # 9. Anti-Hallucination Confidence Assessment
-    confidence_reasons: List[str] = []
-    
-    # Include all flags
-    if flags:
-        confidence_reasons.extend(flags)
-        
-    # Check fallback providers used
-    if getattr(receipt, "used_fallback", False):
-        fb_reason = getattr(receipt, "fallback_reason", None)
-        if fb_reason == "timeout":
-            confidence_reasons.append("Vision OCR extraction: Gemini timed out after 15s, falling back to OpenRouter.")
-        elif fb_reason == "rate_limit_429":
-            confidence_reasons.append("Vision OCR extraction: Gemini returned 429 rate limit, falling back to OpenRouter.")
-        else:
-            confidence_reasons.append("Vision OCR extraction utilized fallback model instead of primary provider.")
-
-    if getattr(description, "used_fallback", False):
-        fb_reason = getattr(description, "fallback_reason", None)
-        if fb_reason == "timeout":
-            confidence_reasons.append("Description parsing: Groq timed out after 10s, falling back to OpenRouter.")
-        elif fb_reason == "rate_limit_429":
-            confidence_reasons.append("Description parsing: Groq returned 429 rate limit, falling back to OpenRouter.")
-        else:
-            confidence_reasons.append("Description parsing utilized fallback model instead of primary provider.")
-
-    # Partial extraction — some items may have been missed by OCR
-    if getattr(receipt, "partial_extraction", False):
-        confidence_reasons.append(
-            "Partial extraction detected: the sum of extracted line items is significantly "
-            "less than the printed grand total. Verify the receipt image shows all items clearly."
-        )
-
-    # Surface any hallucination guard flags from extraction
-    for eflag in getattr(receipt, "extraction_flags", []):
-        if ("Hallucination guard" in eflag or "Partial extraction" in eflag or "Security" in eflag):
-            if eflag not in confidence_reasons:
-                confidence_reasons.append(eflag)
-
-    # Check unmatched mentions or unclear references
-    for um in description.unmatched_mentions:
-        if f"Unmatched mention from description: '{um}'" not in confidence_reasons:
-            confidence_reasons.append(f"Unmatched mention from description: '{um}'")
-    for ur in description.unclear_references:
-        if f"Unclear reference from description: '{ur}'" not in confidence_reasons:
-            confidence_reasons.append(f"Unclear reference from description: '{ur}'")
-
-    # Deduplicate reasons while preserving order
-    deduped_reasons = list(dict.fromkeys(confidence_reasons))
-
-    if not deduped_reasons:
-        confidence = ConfidenceDetail(level="high", reasons=[])
-    else:
-        confidence = ConfidenceDetail(level="needs_review", reasons=deduped_reasons)
-
     return SplitResult(
         per_person=per_person_final,
-        grand_total=adjusted_grand_total,
+        grand_total=int(round(receipt.grand_total)),
         reconciliation=reconciliation,
         paid_by=resolved_paid_by,
         settle_up=settle_up,
         assumptions=assumptions,
-        flags=flags,
-        confidence=confidence
+        flags=flags
     )
 
