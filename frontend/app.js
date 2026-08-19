@@ -1,10 +1,15 @@
 // Fair-Split Frontend Application Logic
-// Configurable API base URL with LocalStorage persistence and smart cloud host detection
-const DEFAULT_API_URL = window.API_BASE_URL || (
-  window.location.hostname === 'localhost' && window.location.port === '3000'
-    ? 'http://localhost:8000'
-    : window.location.origin
-);
+// Smart API base URL detection:
+//   - localhost:3000 (static dev server) → local backend at :8000
+//   - *.github.io (GitHub Pages)         → Render production backend
+//   - everything else (Render itself)    → same origin (FastAPI serves the SPA)
+const RENDER_BACKEND_URL = 'https://fair-split.onrender.com';
+const DEFAULT_API_URL = window.API_BASE_URL || (() => {
+  const host = window.location.hostname;
+  if (host === 'localhost' && window.location.port === '3000') return 'http://localhost:8000';
+  if (host.endsWith('.github.io') || host.endsWith('.github.com')) return RENDER_BACKEND_URL;
+  return window.location.origin; // Render: FastAPI serves both API and SPA on same origin
+})();
 let API_BASE_URL = localStorage.getItem('fair_split_api_url') || DEFAULT_API_URL;
 
 let selectedBase64Image = null;
