@@ -99,6 +99,24 @@ flowchart LR
 
 ---
 
+## 🆓 100% Free Tier Setup ($0 Spend Architecture)
+
+This application is engineered specifically to run **entirely on free-tier API keys with zero paid subscriptions or credit card requirements**:
+
+| Provider | Role in Fair-Split | Free Model Used | Where to Get Free Key ($0) |
+|---|---|---|---|
+| **Groq** | Primary Vision & Text | `qwen/qwen3.6-27b` & `openai/gpt-oss-120b` | [console.groq.com](https://console.groq.com) (Instant free signup) |
+| **Google Gemini** | Secondary Vision OCR | `gemini-2.5-flash` / `gemini-3.7-flash` | [aistudio.google.com](https://aistudio.google.com) (Free 15 RPM / 1,500 RPD) |
+| **OpenRouter** | Zero-Cost Fallback | `google/gemma-4-26b-a4b-it:free` & `nvidia/nemotron-3-super-120b-a12b:free` | [openrouter.ai](https://openrouter.ai) (100% free `:free` models) |
+
+### Automatic 429 Graceful Degradation
+When running on free tiers, provider rate limits (e.g. Gemini 15 RPM) can occasionally be triggered. **Fair-Split is built with zero-failure graceful degradation**:
+1. If Groq hits a free rate limit, it automatically falls back to Gemini.
+2. If Gemini hits a free quota limit (429), it automatically routes to OpenRouter's `:free` models.
+3. The user's bill is always split accurately without ever failing or requiring a paid plan.
+
+---
+
 ## 🎯 Preset Test Scenarios (R1 – R7)
 
 The application includes 7 real-world test scenarios pre-loaded as clickable chips in the UI:
