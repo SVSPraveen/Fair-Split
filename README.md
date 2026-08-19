@@ -196,7 +196,7 @@ The application includes **12 real-world dining scenarios** pre-loaded as clicka
 | Preset | Venue Type | Key Complexity Tested |
 |---|---|---|
 | **R5** | **Filter & Brew Cafe** | 2-person breakfast &bull; Single payer &bull; Thermal print layout |
-| **R6** | **Spice Affair** | 4-person Indian dining &bull; Multi-portion curries &bull; Shared naans & desserts |
+| **R6** | **Spice Affair** | 4-person Indian dining &bull; Multi-portion curries &bull; Unmentioned item fairness fallback &bull; Shared naans |
 | **R7** | **Dosa Plaza** | 3-person South Indian QSR &bull; Multi-combo dishes &bull; Beverage sharing |
 | **R8** | **Olive & Vine** | 5-person fine dining &bull; Course-by-course sharing &bull; Wine sharing |
 | **R9** | **Sky High Lounge** | 5-person rooftop lounge &bull; Alcohol vs non-alcoholic split &bull; Bar snacks |
