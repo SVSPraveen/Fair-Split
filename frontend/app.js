@@ -1,7 +1,12 @@
 // Fair-Split Frontend Application Logic
 // Configurable API base URL with LocalStorage persistence and in-UI settings panel
-const DEFAULT_API_URL = window.API_BASE_URL || 'http://localhost:8000';
+const DEFAULT_API_URL = window.API_BASE_URL || (
+  window.location.hostname === 'localhost' && window.location.port === '3000'
+    ? 'http://localhost:8000'
+    : window.location.origin
+);
 let API_BASE_URL = localStorage.getItem('fair_split_api_url') || DEFAULT_API_URL;
+
 
 let selectedBase64Image = null;
 let lastSplitResponse = null;

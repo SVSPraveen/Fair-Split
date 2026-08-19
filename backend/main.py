@@ -253,3 +253,13 @@ def split_bill(request: Request, body: SplitRequest) -> SplitResult:
     )
 
     return split_result
+
+
+# ---------------------------------------------------------------------------
+# Static Files Mount (Single-Service Deployment)
+# ---------------------------------------------------------------------------
+from fastapi.staticfiles import StaticFiles
+
+_frontend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend"))
+if os.path.isdir(_frontend_path):
+    app.mount("/", StaticFiles(directory=_frontend_path, html=True), name="frontend")
