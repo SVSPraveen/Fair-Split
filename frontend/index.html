@@ -144,11 +144,17 @@
                 <p class="upload-hint">Supports PNG, JPEG, WEBP &bull; Max 20MB &bull; Auto-rotated & Optimized</p>
               </div>
               <div class="preview-area hidden" id="preview-area">
-                <img id="receipt-preview" alt="Receipt preview" class="receipt-thumbnail">
+                <div class="thumbnail-wrapper" id="preview-thumb-btn" title="Click to view full high-resolution receipt">
+                  <img id="receipt-preview" alt="Receipt preview" class="receipt-thumbnail">
+                  <div class="thumb-hover-overlay">🔍 View</div>
+                </div>
                 <div class="preview-info">
                   <span id="preview-filename" class="preview-filename"></span>
                   <span id="preview-meta" class="preview-meta"></span>
-                  <button type="button" id="remove-file-btn" class="btn-text">Change Image</button>
+                  <div class="preview-actions-row">
+                    <button type="button" id="view-full-image-btn" class="btn-preview-action">🔍 View Full Receipt</button>
+                    <button type="button" id="remove-file-btn" class="btn-text">Change Image</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -330,9 +336,14 @@
               <h2 class="card-title">3. Itemized Breakdown Per Person</h2>
               <p class="card-desc">Individual consumption, proportional GST, and final integer payable</p>
             </div>
-            <button type="button" id="copy-table-btn" class="btn-secondary-sm">
-              <span>📊</span> Copy Table
-            </button>
+            <div class="header-actions-group">
+              <button type="button" id="view-receipt-from-results-btn" class="btn-secondary-sm" title="View uploaded receipt photo">
+                <span>🧾</span> View Receipt
+              </button>
+              <button type="button" id="copy-table-btn" class="btn-secondary-sm" title="Copy breakdown as spreadsheet table">
+                <span>📊</span> Copy Table
+              </button>
+            </div>
           </div>
 
           <div class="table-responsive">
@@ -392,6 +403,30 @@
 
     </main>
 
+    <!-- Full Image Lightbox Modal -->
+    <div id="image-modal" class="image-modal hidden" role="dialog" aria-modal="true">
+      <div class="modal-backdrop" id="modal-backdrop"></div>
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title-row">
+            <span class="modal-icon">🧾</span>
+            <div>
+              <h3 id="modal-image-title" class="modal-title">Receipt Photo</h3>
+              <span id="modal-image-meta" class="modal-meta-text">High-Resolution Image View</span>
+            </div>
+          </div>
+          <button type="button" id="close-modal-btn" class="btn-close-modal" aria-label="Close modal">✕</button>
+        </div>
+        <div class="modal-body">
+          <img id="modal-full-image" class="modal-full-image" alt="Receipt Full High-Resolution View">
+        </div>
+        <div class="modal-footer">
+          <span class="modal-hint">💡 Tip: Use your mouse wheel or pinch to zoom if needed</span>
+          <button type="button" id="modal-close-action-btn" class="btn-secondary-sm">Close</button>
+        </div>
+      </div>
+    </div>
+
     <footer class="app-footer">
       <p>Fair-Split &bull; Pure Python Deterministic Settlement Engine &bull; FastAPI + Vanilla Web</p>
     </footer>
@@ -399,7 +434,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
   <script>mermaid.initialize({ startOnLoad: false, theme: 'base', themeVariables: { primaryColor: '#EEF2FF', primaryTextColor: '#1E1B4B', primaryBorderColor: '#6366F1', lineColor: '#64748B', secondaryColor: '#ECFDF5', tertiaryColor: '#FFFFFF', background: '#F8FAFC', mainBkg: '#EEF2FF', nodeBorder: '#6366F1', edgeLabelBackground: '#FFFFFF', clusterBkg: '#FFFFFF', fontSize: '14px', fontFamily: 'Plus Jakarta Sans, sans-serif' } });</script>
-  <script src="app.js?v=4.5"></script>
+  <script src="app.js?v=5.0"></script>
 </body>
 </html>
 

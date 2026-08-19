@@ -121,6 +121,48 @@ const apiStatusBadge = document.getElementById('api-status-badge');
 // Toast Element
 const toastEl = document.getElementById('toast');
 
+// Image Lightbox Modal Elements
+const imageModal = document.getElementById('image-modal');
+const modalBackdrop = document.getElementById('modal-backdrop');
+const closeModalBtn = document.getElementById('close-modal-btn');
+const modalCloseActionBtn = document.getElementById('modal-close-action-btn');
+const modalFullImage = document.getElementById('modal-full-image');
+const modalImageTitle = document.getElementById('modal-image-title');
+const modalImageMeta = document.getElementById('modal-image-meta');
+const previewThumbBtn = document.getElementById('preview-thumb-btn');
+const viewFullImageBtn = document.getElementById('view-full-image-btn');
+const viewReceiptFromResultsBtn = document.getElementById('view-receipt-from-results-btn');
+
+function openImageModal() {
+  const src = receiptPreview.src;
+  if (!src) {
+    showToast('No receipt image loaded yet.');
+    return;
+  }
+  modalFullImage.src = src;
+  modalImageTitle.textContent = previewFilename.textContent || 'Receipt Photo';
+  modalImageMeta.textContent = previewMeta.textContent || 'High-Resolution View';
+  imageModal.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeImageModal() {
+  imageModal.classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+if (previewThumbBtn) previewThumbBtn.addEventListener('click', openImageModal);
+if (viewFullImageBtn) viewFullImageBtn.addEventListener('click', (e) => { e.stopPropagation(); openImageModal(); });
+if (viewReceiptFromResultsBtn) viewReceiptFromResultsBtn.addEventListener('click', openImageModal);
+if (closeModalBtn) closeModalBtn.addEventListener('click', closeImageModal);
+if (modalCloseActionBtn) modalCloseActionBtn.addEventListener('click', closeImageModal);
+if (modalBackdrop) modalBackdrop.addEventListener('click', closeImageModal);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && imageModal && !imageModal.classList.contains('hidden')) {
+    closeImageModal();
+  }
+});
+
 function showToast(message) {
   if (!toastEl) return;
   toastEl.textContent = message;
