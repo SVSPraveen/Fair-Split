@@ -1208,25 +1208,36 @@ details[open] .guide-toggle-icon {
    Mermaid Flowchart Card
    ========================================================================== */
 .flow-card {
-  background: #0F172A;
-  color: #FFFFFF;
-  border-color: #1E293B;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.2);
+  background: var(--bg-card);
+  border-radius: var(--radius-2xl);
+  padding: 26px 30px;
+  box-shadow: var(--shadow-card);
+  border: 1px solid var(--border-color);
 }
 
 .flow-card .card-title {
-  color: #FFFFFF;
+  color: var(--text-main);
 }
 
 .flow-card .card-desc {
-  color: #94A3B8;
+  color: var(--text-muted);
 }
 
 .mermaid-container {
   display: flex;
   justify-content: center;
-  padding: 24px 12px;
+  align-items: center;
+  padding: 28px 20px;
+  background: #F8FAFC;
+  border-radius: var(--radius-xl);
+  border: 1px solid #E2E8F0;
+  margin-top: 14px;
   overflow-x: auto;
+}
+
+.mermaid-container svg {
+  max-width: 100%;
+  height: auto;
 }
 
 /* ==========================================================================

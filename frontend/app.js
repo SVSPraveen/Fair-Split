@@ -652,8 +652,9 @@ async function renderMoneyFlowDiagram(data) {
       const nodeId = 'P' + i;
       def += `  ${nodeId}(["👤 ${p.name}\\n₹${p.total.toFixed(0)}"])\n`;
       def += `  BILL --> ${nodeId}\n`;
+      def += `  style ${nodeId} fill:#EEF2FF,color:#3730A3,stroke:#6366F1,stroke-width:2px\n`;
     });
-    def += '  style BILL fill:#4f46e5,color:#fff,stroke:#6366f1\n';
+    def += '  style BILL fill:#FEF3C7,color:#92400E,stroke:#F59E0B,stroke-width:2px\n';
     await _renderMermaid(container, def);
     return;
   }
@@ -661,7 +662,7 @@ async function renderMoneyFlowDiagram(data) {
   let def = 'graph LR\n';
   const payerSafe = payer.replace(/[^a-zA-Z0-9]/g, '_');
   def += `  ${payerSafe}(["💳 ${payer}\\n Paid ₹${data.grand_total.toFixed(0)}"])\n`;
-  def += `  style ${payerSafe} fill:#059669,color:#fff,stroke:#047857\n`;
+  def += `  style ${payerSafe} fill:#ECFDF5,color:#065F46,stroke:#10B981,stroke-width:2.5px\n`;
 
   settleUp.forEach((t, i) => {
     const fromSafe = (t.from || t.from_person || '').replace(/[^a-zA-Z0-9]/g, '_');
@@ -671,7 +672,7 @@ async function renderMoneyFlowDiagram(data) {
 
     def += `  ${fromSafe}(["👤 ${fromName}"])\n`;
     def += `  ${fromSafe} -->|"₹${amt.toFixed(0)}"| ${toSafe}\n`;
-    def += `  style ${fromSafe} fill:#4f46e5,color:#fff,stroke:#6366f1\n`;
+    def += `  style ${fromSafe} fill:#EEF2FF,color:#3730A3,stroke:#6366F1,stroke-width:2px\n`;
   });
 
   await _renderMermaid(container, def);
