@@ -187,6 +187,11 @@ function handleFileSelection(file) {
     showError('Please upload a valid image file (PNG, JPEG, WEBP).');
     return;
   }
+  
+  if (file.size > 20 * 1024 * 1024) {
+    showError('📁 The image is too large (over 20 MB). Please compress or take a screenshot of the receipt and try again.');
+    return;
+  }
 
   const reader = new FileReader();
   reader.onload = (event) => {
