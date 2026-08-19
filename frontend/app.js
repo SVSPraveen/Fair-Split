@@ -3,7 +3,7 @@
 //   - localhost:3000 (static dev server) → local backend at :8000
 //   - *.github.io (GitHub Pages)         → Render production backend
 //   - everything else (Render itself)    → same origin (FastAPI serves the SPA)
-const RENDER_BACKEND_URL = 'https://fair-split.onrender.com';
+const RENDER_BACKEND_URL = 'https://fair-split-r3rq.onrender.com';
 const DEFAULT_API_URL = window.API_BASE_URL || (() => {
   const host = window.location.hostname;
   if (host === 'localhost' && window.location.port === '3000') return 'http://localhost:8000';
