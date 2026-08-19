@@ -62,13 +62,13 @@ flowchart TD
 
     subgraph VisionPipeline ["👁️ 2. Resilient Multimodal Vision OCR"]
         IMG --> PREP["🖼️ Image Preprocessing & Base64 Guard"]:::visionStyle
-        PREP --> OCR["⚡ Tier 1: Groq Vision (qwen3.6-27b)<br/>↳ Fallback: Gemini 3.6 Flash / OpenRouter"]:::visionStyle
+        PREP --> OCR["⚡ Tier 1: Groq Vision — qwen3.6-27b / gpt-oss-120b<br/>↳ Tier 2: Gemini — 3.1-flash-lite › 3.5-flash › flash-latest<br/>↳ Tier 3: OpenRouter — gemma-4-26b / gemma-4-31b"]:::visionStyle
         OCR --> V_CHECK{"🛡️ OCR Math Self-Check<br/>(Subtotal & Tax Cross-Validation)"}:::guardStyle
     end
 
     subgraph NLPPipeline ["🧠 3. Conversational Reasoning & Security"]
         TXT --> INJ["🛡️ Prompt Injection Defense & Sanitizer"]:::guardStyle
-        INJ --> NLP["⚡ Tier 1: Groq NLP (gpt-oss-120b)<br/>↳ Fuzzy Dish Mapping, Treats & Blanket Sharing"]:::nlpStyle
+        INJ --> NLP["⚡ Tier 1: Groq Text — gpt-oss-120b › gpt-oss-20b › qwen3.6-27b<br/>↳ Tier 2: Gemini — 3.1-flash-lite › 3.5-flash › flash-latest<br/>↳ Tier 3: OpenRouter — gemma-4-26b / nemotron-nano-30b"]:::nlpStyle
     end
 
     subgraph CoreEngine ["⚖️ 4. Deterministic Fairness Engine"]
@@ -87,15 +87,15 @@ flowchart TD
 ```
 
 ### 1. Multimodal OCR with Multi-Tier Fallback (`backend/extraction.py`)
-- **Tier 1 (Primary Vision Engine)**: Groq Vision (`qwen/qwen3.6-27b`).
-- **Tier 2 (Secondary Vision Engine)**: Google Gemini Vision (`gemini-3.6-flash`).
-- **Tier 3 (Zero-Cost Vision Fallback)**: OpenRouter Vision (`google/gemma-4-26b-a4b-it:free`).
+- **Tier 1 — Groq Vision** (primary, fastest): `qwen/qwen3.6-27b` → `openai/gpt-oss-120b`
+- **Tier 2 — Google Gemini Vision** (high-quota free fallback): `gemini-3.1-flash-lite` → `gemini-3.5-flash` → `gemini-flash-latest` → `gemini-3.6-flash`
+- **Tier 3 — OpenRouter Vision** (zero-cost last resort): `google/gemma-4-26b-a4b-it:free` → `google/gemma-4-31b-it:free` → `liquid/lfm-2.5-2.6b:free`
 - **Mathematical Self-Check Verification**: Verifies line-item subtotal addition against the printed grand total and flags OCR discrepancies before settlement.
 
 ### 2. Group Dining Description Parser (`backend/description_parser.py`)
-- **Tier 1 (Primary Text Engine)**: Groq (`openai/gpt-oss-120b`).
-- **Tier 2 (Secondary Text Engine)**: Google Gemini (`gemini-3.6-flash`).
-- **Tier 3 (Zero-Cost Text Fallback)**: OpenRouter (`nvidia/nemotron-3-super-120b-a12b:free`).
+- **Tier 1 — Groq Text** (primary): `openai/gpt-oss-120b` → `openai/gpt-oss-20b` → `qwen/qwen3.6-27b`
+- **Tier 2 — Google Gemini Text** (high-quota free fallback): `gemini-3.1-flash-lite` → `gemini-3.5-flash` → `gemini-flash-latest` → `gemini-3.6-flash`
+- **Tier 3 — OpenRouter Text** (zero-cost last resort): `google/gemma-4-26b-a4b-it:free` → `nvidia/nemotron-3-nano-30b-a3b:free` → `liquid/lfm-2.5-2.6b:free`
 - **Fuzzy Item Mapping**: Resolves shorthand dish references (e.g. *"tikka"* $\to$ *"Chicken Tikka Starter"*, *"naan"* $\to$ *"Garlic Naan"*).
 - **Arbitrary Partial Sharing**: Handles 2-of-4, 3-of-6, or fractional dish sharing with equal subtotal allocation.
 - **Blanket Statements**: Intelligently handles statements like *"everything else was shared equally by all"*.
@@ -327,7 +327,7 @@ Processes a receipt image and consumption description to return itemized allocat
 - [x] **Zero Port Conflict**: Single-service architecture (FastAPI mounts Frontend SPA).
 - [x] **Load Balancer Ready**: Uvicorn configured with `--proxy-headers --forwarded-allow-ips="*"`.
 - [x] **Rate Limiting**: 20 requests/minute per client IP via SlowAPI.
-- [x] **Fail-Safe Fallbacks**: Multi-model vision and text routing (Gemini $\to$ Groq $\to$ OpenRouter).
+- [x] **Fail-Safe Fallbacks**: Multi-model vision and text routing (Groq $\to$ Gemini $\to$ OpenRouter).
 - [x] **Memory Capped**: Base64 payload capped at 28MB; descriptions capped at 3,000 characters.
 - [x] **Client-Side Guard**: 20MB file size limit enforced before Base64 encoding in the browser.
 - [x] **Deterministic Math**: Largest Remainder Method prevents floating point penny rounding errors.
