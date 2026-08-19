@@ -330,33 +330,49 @@ details[open] .guide-toggle-icon {
 }
 
 /* ==========================================================================
-   Preset Chips Matrix
+   Preset Chips Matrix (Grouped Structure)
    ========================================================================== */
-.sample-chips-wrapper {
+.presets-container {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding: 12px 14px;
+  flex-direction: column;
+  gap: 12px;
   background: #F8FAFC;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
+  padding: 16px 18px;
   border: 1px solid var(--border-color);
 }
 
-.sample-chips-label {
-  font-size: 11.5px;
+.preset-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.preset-group:not(:last-child) {
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--border-color);
+}
+
+.preset-group-title {
+  font-size: 11px;
   font-weight: 800;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.6px;
-  margin-right: 4px;
+}
+
+.preset-chips-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .sample-chip {
   background: #FFFFFF;
   border: 1px solid #CBD5E1;
   border-radius: var(--radius-pill);
-  padding: 5px 12px;
+  padding: 6px 14px;
   font-size: 12px;
   font-weight: 600;
   color: var(--text-body);
@@ -364,7 +380,8 @@ details[open] .guide-toggle-icon {
   transition: var(--transition);
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .sample-chip:hover {
