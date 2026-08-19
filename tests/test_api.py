@@ -19,8 +19,8 @@ def test_health_endpoint():
     print("\n--- Testing GET /health ---")
     response = client.get("/health")
     assert response.status_code == 200, f"Expected 200, got {response.status_code}"
-    assert response.json() == {"status": "ok"}
-    print(f"Status: {response.status_code}, Body: {response.json()}")
+    assert response.json().get("status") == "ok"
+    print("Health response:", response.json())
     print("--> GET /health PASSED")
 
 

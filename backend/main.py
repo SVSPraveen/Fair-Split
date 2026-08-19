@@ -1,6 +1,7 @@
 import base64
 import binascii
 import logging
+import re
 import time
 import uuid
 from typing import Dict, Any, Callable
@@ -203,9 +204,39 @@ def split_bill(request: Request, body: SplitRequest) -> SplitResult:
             detail=f"Receipt extraction failed: {str(extract_err)}"
         )
 
+    # 2b. Fast Deterministic Mismatch Pre-Check (Zero Hallucination, Instant Response)
+    known_items = [item.name for item in receipt_data.items]
+    desc_lower = clean_description.lower()
+    mismatch_triggers = [
+        "receipt is completely wrong",
+        "wrong receipt",
+        "wrong bill",
+        "table mistake",
+        "handed us table",
+        "does not match our meal",
+        "does not match our order",
+        "not our bill",
+        "not our receipt",
+        "incorrect receipt",
+        "incorrect bill"
+    ]
+    if any(trigger in desc_lower for trigger in mismatch_triggers):
+        # Lexical verification: confirm that no significant receipt item words appear in the description
+        item_words = set()
+        for item in known_items:
+            for w in re.findall(r'[a-zA-Z]{3,}', item.lower()):
+                if w not in {'the', 'and', 'with', 'for', 'pcs', 'portion', 'combo', 'plate', 'item', 'set', 'table', 'bill', 'receipt'}:
+                    item_words.add(w)
+        desc_words = set(re.findall(r'[a-zA-Z]{3,}', desc_lower))
+        if len(item_words.intersection(desc_words)) == 0:
+            logger.info(f"[{request_id}] Fast deterministic mismatch triggered: description explicitly notes wrong receipt with 0 food overlap.")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="The provided receipt does not match the description at all. Please upload the correct receipt."
+            )
+
     # 3. Description Parsing against Known Receipt Items
     try:
-        known_items = [item.name for item in receipt_data.items]
         description_data = parse_description(
             description=clean_description,
             known_items=known_items

@@ -25,9 +25,9 @@ GROQ_TEXT_PRIMARY = os.getenv("GROQ_TEXT_MODEL", "openai/gpt-oss-120b")
 OPENROUTER_VISION_FALLBACK = os.getenv("OPENROUTER_VISION_MODEL", "google/gemma-4-26b-a4b-it:free")
 OPENROUTER_TEXT_FALLBACK = os.getenv("OPENROUTER_TEXT_MODEL", "nvidia/nemotron-3-super-120b-a12b:free")
 
-# Hard Timeouts (15s for vision, 10s for text)
-VISION_TIMEOUT_SECONDS: float = float(os.getenv("VISION_TIMEOUT_SECONDS", "15.0"))
-TEXT_TIMEOUT_SECONDS: float = float(os.getenv("TEXT_TIMEOUT_SECONDS", "10.0"))
+# Hard Timeouts (5s for vision, 4s for text for sub-2s to 6s max responses)
+VISION_TIMEOUT_SECONDS: float = float(os.getenv("VISION_TIMEOUT_SECONDS", "5.0"))
+TEXT_TIMEOUT_SECONDS: float = float(os.getenv("TEXT_TIMEOUT_SECONDS", "4.0"))
 
 
 import re
@@ -196,9 +196,6 @@ class LLMProvider:
         # -------------------------------------------------------------
         # Tier 1 (Primary): Groq Vision (qwen/qwen3.6-27b)
         # -------------------------------------------------------------
-        # -------------------------------------------------------------
-        # Tier 1 (Primary): Groq Vision (qwen/qwen3.6-27b)
-        # -------------------------------------------------------------
         if not force_fallback and self._groq_client:
             try:
                 resp = self._groq_client.chat.completions.create(
@@ -214,7 +211,7 @@ class LLMProvider:
                         }
                     ],
                     temperature=0.0,
-                    max_tokens=4096,
+                    max_tokens=2500,
                     timeout=timeout_seconds
                 )
                 if resp.choices and resp.choices[0].message.content:
@@ -239,13 +236,13 @@ class LLMProvider:
                     logger.warning(f"Groq vision call failed ({e}). Instantly falling back to Gemini.")
 
 
-        # -------------------------------------------------------------
-        # Tier 2 (Secondary): Gemini 3.7 Flash
-        # -------------------------------------------------------------
         used_fallback = True
         if fallback_reason is None:
             fallback_reason = "forced_fallback" if force_fallback else "primary_unavailable"
 
+        # -------------------------------------------------------------
+        # Tier 2 (Secondary): Gemini Vision (gemini-3.6-flash)
+        # -------------------------------------------------------------
         if self._gemini_client:
             try:
                 img = Image.open(io.BytesIO(optimized_bytes))
@@ -255,49 +252,44 @@ class LLMProvider:
                     config=types.GenerateContentConfig(
                         system_instruction=VISION_SYSTEM_PROMPT,
                         temperature=0.1,
-                        max_output_tokens=4096,
+                        max_output_tokens=2500,
                         http_options=types.HttpOptions(timeout=int(timeout_seconds * 1000))
                     )
                 )
                 if response.text:
                     return response.text, used_fallback, fallback_reason
                 raise ValueError("Gemini returned empty response text")
-            except (httpx.TimeoutException, TimeoutError) as gemini_to_err:
-                logger.warning(f"Gemini vision fallback timed out: {gemini_to_err}")
-                if not self._openrouter_client:
-                    raise TimeoutError(f"Vision extraction timed out after {int(timeout_seconds)}s on Gemini ({GEMINI_VISION_PRIMARY}).") from gemini_to_err
             except Exception as gemini_err:
-                logger.warning(f"Gemini vision fallback failed ({gemini_err}), falling back to OpenRouter.")
+                logger.warning(f"Gemini vision fallback failed ({gemini_err}), instantly falling back to OpenRouter.")
 
         # -------------------------------------------------------------
         # Tier 3 (Tertiary): OpenRouter Vision (google/gemma-4-26b-a4b-it:free)
         # -------------------------------------------------------------
-        if not self._openrouter_client:
-            raise ValueError("No fallback vision client available (all providers exhausted).")
+        if self._openrouter_client:
+            try:
+                resp = self._openrouter_client.chat.completions.create(
+                    model=OPENROUTER_VISION_FALLBACK,
+                    messages=[
+                        {"role": "system", "content": VISION_SYSTEM_PROMPT},
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {"type": "image_url", "image_url": {"url": data_uri}}
+                            ]
+                        }
+                    ],
+                    temperature=0.1,
+                    max_tokens=2500,
+                    timeout=timeout_seconds + 3.0
+                )
+                if resp.choices and resp.choices[0].message.content:
+                    return resp.choices[0].message.content or "", used_fallback, fallback_reason
+            except Exception as or_err:
+                logger.error(f"OpenRouter vision fallback failed ({or_err}). All vision providers exhausted.")
+                raise TimeoutError("All vision providers exhausted.") from or_err
 
-        try:
-            resp = self._openrouter_client.chat.completions.create(
-                model=OPENROUTER_VISION_FALLBACK,
-                messages=[
-                    {"role": "system", "content": VISION_SYSTEM_PROMPT},
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": prompt},
-                            {"type": "image_url", "image_url": {"url": data_uri}}
-                        ]
-                    }
-                ],
-                temperature=0.1,
-                max_tokens=4096,
-                timeout=timeout_seconds
-            )
-            return resp.choices[0].message.content or "", used_fallback, fallback_reason
-        except (httpx.TimeoutException, openai.APITimeoutError, TimeoutError) as fb_err:
-            logger.error(f"OpenRouter vision fallback timed out after {int(timeout_seconds)}s: {fb_err}")
-            raise TimeoutError(
-                f"Vision extraction timed out after {int(timeout_seconds)}s on fallback OpenRouter ({OPENROUTER_VISION_FALLBACK})."
-            ) from fb_err
+        raise ValueError("No fallback vision client available (all providers exhausted).")
 
     def generate_text(
         self,
@@ -316,12 +308,15 @@ class LLMProvider:
         force_fallback: bool = False,
         timeout_seconds: float = TEXT_TIMEOUT_SECONDS
     ) -> Tuple[str, bool, Optional[str]]:
-        """Executes a text request using primary Groq, falling back to OpenRouter on 429 or timeout.
+        """Executes a text request using primary Groq, falling back to Gemini then OpenRouter.
         Returns: (response_text, used_fallback_boolean, fallback_reason)
         """
         used_fallback = False
         fallback_reason = None
 
+        # -------------------------------------------------------------
+        # Tier 1 (Primary): Groq Text (openai/gpt-oss-120b)
+        # -------------------------------------------------------------
         if not force_fallback and self._groq_client:
             try:
                 messages = []
@@ -333,7 +328,7 @@ class LLMProvider:
                     model=GROQ_TEXT_PRIMARY,
                     messages=messages,
                     temperature=0.1,
-                    max_tokens=4096,
+                    max_tokens=2500,
                     timeout=timeout_seconds
                 )
                 return response.choices[0].message.content or "", False, None
@@ -347,21 +342,22 @@ class LLMProvider:
                 )
                 if is_timeout:
                     fallback_reason = "timeout"
-                    logger.warning(f"Groq text timed out after {int(timeout_seconds)}s, instantly falling back to Gemini/OpenRouter.")
+                    logger.warning(f"Groq text timed out after {int(timeout_seconds)}s, instantly falling back to Gemini.")
                 elif is_rate_limit:
                     fallback_reason = "rate_limit_429"
-                    logger.warning("Groq text 429 rate limit hit, instantly falling back to Gemini/OpenRouter (0ms delay).")
+                    logger.warning("Groq text 429 rate limit hit, instantly falling back to Gemini (0ms delay).")
                 else:
                     fallback_reason = "error"
                     logger.warning(f"Groq text call failed ({e}). Instantly attempting fallback.")
 
 
-        # Fallback Text: Try Gemini first, then OpenRouter
         used_fallback = True
         if fallback_reason is None:
             fallback_reason = "forced_fallback" if force_fallback else "primary_unavailable"
 
-        # 1. Try Gemini Text
+        # -------------------------------------------------------------
+        # Tier 2 (Secondary): Gemini Text (gemini-3.6-flash)
+        # -------------------------------------------------------------
         if self._gemini_client:
             try:
                 full_prompt = f"{TEXT_SYSTEM_PROMPT}\n\n{prompt}" if not system_prompt else f"{system_prompt}\n\n{prompt}"
@@ -371,22 +367,38 @@ class LLMProvider:
                     config=types.GenerateContentConfig(
                         system_instruction=TEXT_SYSTEM_PROMPT,
                         temperature=0.1,
-                        max_output_tokens=4096,
+                        max_output_tokens=2500,
                         http_options=types.HttpOptions(timeout=int(timeout_seconds * 1000))
                     )
                 )
                 if response.text:
                     return response.text, used_fallback, fallback_reason
-            except (httpx.TimeoutException, TimeoutError) as gemini_to_err:
-                logger.warning(f"Gemini text fallback timed out: {gemini_to_err}")
-                if not self._openrouter_client:
-                    raise TimeoutError(f"Description parsing timed out after {int(timeout_seconds)}s on Gemini ({GEMINI_VISION_PRIMARY}).") from gemini_to_err
             except Exception as gemini_err:
-                logger.warning(f"Gemini text fallback failed ({gemini_err}), falling back to OpenRouter.")
+                logger.warning(f"Gemini text fallback failed ({gemini_err}), instantly falling back to OpenRouter.")
 
-        # 2. Try OpenRouter Text
-        if not self._openrouter_client:
-            raise ValueError("No fallback text client available (both Groq and OpenRouter unavailable).")
+        # -------------------------------------------------------------
+        # Tier 3 (Tertiary): OpenRouter Text (nvidia/nemotron-3-super-120b-a12b:free)
+        # -------------------------------------------------------------
+        if self._openrouter_client:
+            try:
+                messages = []
+                if system_prompt:
+                    messages.append({"role": "system", "content": system_prompt})
+                messages.append({"role": "user", "content": prompt})
+
+                response = self._openrouter_client.chat.completions.create(
+                    model=OPENROUTER_TEXT_FALLBACK,
+                    messages=messages,
+                    temperature=0.1,
+                    max_tokens=2500,
+                    timeout=timeout_seconds + 3.0
+                )
+                return response.choices[0].message.content or "", used_fallback, fallback_reason
+            except Exception as or_err:
+                logger.error(f"OpenRouter text fallback failed ({or_err}). All text providers exhausted.")
+                raise TimeoutError("All text providers exhausted.") from or_err
+
+        raise ValueError("No fallback text client available (all text providers exhausted).")
 
         messages = []
         if system_prompt:

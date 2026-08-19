@@ -689,33 +689,99 @@ async function _renderMermaid(container, definition) {
 }
 
 // -------------------------------------------------------------
-// Copy & Share Handlers
+// Copy & Share Handlers with Visual Feedback & Robust Fallback
 // -------------------------------------------------------------
+function copyToClipboard(text, successMsg, btnEl) {
+  const originalHtml = btnEl ? btnEl.innerHTML : null;
+
+  function onSuccess() {
+    showToast(successMsg);
+    if (btnEl) {
+      btnEl.innerHTML = '<span>✅</span> Copied!';
+      btnEl.style.borderColor = '#10B981';
+      btnEl.style.color = '#059669';
+      setTimeout(() => {
+        if (originalHtml) btnEl.innerHTML = originalHtml;
+        btnEl.style.borderColor = '';
+        btnEl.style.color = '';
+      }, 2000);
+    }
+  }
+
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(onSuccess).catch(() => {
+      _fallbackCopy(text, onSuccess);
+    });
+  } else {
+    _fallbackCopy(text, onSuccess);
+  }
+}
+
+function _fallbackCopy(text, callback) {
+  const textArea = document.createElement("textarea");
+  textArea.value = text;
+  textArea.style.position = "fixed";
+  textArea.style.left = "-999999px";
+  textArea.style.top = "-999999px";
+  document.body.appendChild(textArea);
+  textArea.focus();
+  textArea.select();
+  try {
+    document.execCommand('copy');
+    if (callback) callback();
+  } catch (err) {
+    console.error('Fallback copy failed', err);
+    showToast('Failed to copy. Please copy manually.');
+  }
+  document.body.removeChild(textArea);
+}
+
+function showToast(message) {
+  let toast = document.getElementById('fair-split-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'fair-split-toast';
+    toast.className = 'fair-toast';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = message;
+  toast.classList.add('show');
+  clearTimeout(toast._timeout);
+  toast._timeout = setTimeout(() => {
+    toast.classList.remove('show');
+  }, 2600);
+}
+
 copyTableBtn.addEventListener('click', () => {
-  if (!lastSplitResponse || !lastSplitResponse.per_person) return;
+  if (!lastSplitResponse || !lastSplitResponse.per_person) {
+    showToast('No calculation available to copy.');
+    return;
+  }
   let text = "Person\tSubtotal\tTax Share\tService Share\tDiscount Share\tTotal Payable\n";
   lastSplitResponse.per_person.forEach(p => {
     text += `${p.name}\t₹${p.subtotal.toFixed(2)}\t₹${p.tax_share.toFixed(2)}\t₹${p.service_share.toFixed(2)}\t₹${p.discount_share.toFixed(2)}\t₹${p.total.toFixed(2)}\n`;
   });
-  navigator.clipboard.writeText(text).then(() => {
-    showToast('Table copied to clipboard! 📋');
-  });
+  copyToClipboard(text, '📊 Table copied to clipboard!', copyTableBtn);
 });
 
 copySettleBtn.addEventListener('click', () => {
-  if (!lastSplitResponse || !lastSplitResponse.settle_up || lastSplitResponse.settle_up.length === 0) return;
+  if (!lastSplitResponse || !lastSplitResponse.settle_up || lastSplitResponse.settle_up.length === 0) {
+    showToast('No settle-up transfers available.');
+    return;
+  }
   let text = `💸 Fair-Split Settle-Up (Paid by ${lastSplitResponse.paid_by || 'Unknown'}):\n\n`;
   lastSplitResponse.settle_up.forEach(t => {
     text += `• ${t.from} pays ${t.to}: ₹${t.amount.toFixed(2)}\n`;
   });
   text += `\nTotal Bill: ₹${lastSplitResponse.grand_total.toFixed(2)}`;
-  navigator.clipboard.writeText(text).then(() => {
-    showToast('Settle-up summary copied! 📋');
-  });
+  copyToClipboard(text, '📋 Settle-up summary copied!', copySettleBtn);
 });
 
 shareWhatsAppBtn.addEventListener('click', () => {
-  if (!lastSplitResponse || !lastSplitResponse.settle_up || lastSplitResponse.settle_up.length === 0) return;
+  if (!lastSplitResponse || !lastSplitResponse.settle_up || lastSplitResponse.settle_up.length === 0) {
+    showToast('No settle-up transfers available.');
+    return;
+  }
   let text = `🧾 *Fair-Split Bill Settlement*\n`;
   text += `💰 *Total Bill:* ₹${lastSplitResponse.grand_total.toFixed(2)}\n`;
   text += `💳 *Paid by:* ${lastSplitResponse.paid_by || 'Unknown'}\n\n`;
