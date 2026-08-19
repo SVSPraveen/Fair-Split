@@ -14,7 +14,7 @@ from backend.models import DescriptionData
 
 SAMPLE_RECEIPTS_DIR = Path(__file__).parent / "sample_receipts"
 
-# Real verbatim descriptions from assignment brief (R1-R4)
+# Real verbatim descriptions from benchmark dataset (R1-R4)
 TEST_CASES = {
     "R1": {
         "receipt_file": "R1.png",

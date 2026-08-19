@@ -8,7 +8,7 @@ if sys.platform == "win32":
 
 ARTIFACT_DIR = Path(r"C:\Users\svspr\.gemini\antigravity-ide\brain\a6bc5697-ec2c-4e24-b1e3-5400bfb76357")
 SCREENSHOT_PATH = ARTIFACT_DIR / "r2_browser_result.png"
-R2_IMAGE_PATH = Path(r"E:\Epifi Technologies\tests\sample_receipts\R2.png")
+R2_IMAGE_PATH = Path(__file__).parent / "sample_receipts" / "R2.png"
 
 
 def run_browser_test():

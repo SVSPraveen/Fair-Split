@@ -173,7 +173,7 @@ def split_bill(request: Request, body: SplitRequest) -> SplitResult:
         - description: Natural language text of consumption and payment
 
     Returns:
-        SplitResult conforming to the assignment specification.
+        SplitResult conforming to the mathematical bill settlement specification.
     """
     request_id = getattr(request.state, "request_id", "unknown")
 

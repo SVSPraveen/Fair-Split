@@ -121,7 +121,7 @@ When running on free tiers, provider rate limits (e.g. Gemini 15 RPM) can occasi
 
 The application includes **11 real-world dining scenarios** pre-loaded as clickable chips in the UI:
 
-### Official Assignment Specifications (R1 – R4)
+### Core Dining Scenarios (R1 – R4)
 | Preset | Venue Type | Key Complexity & Group Tested |
 |---|---|---|
 | **R1** | **Brew & Bite Café** (Bengaluru) | 3 diners (Ravi, Neha, Sameer) &bull; Itemized cafe dishes &bull; Sameer paid |
