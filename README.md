@@ -13,19 +13,44 @@
 ## 🌟 Key Capabilities & System Architecture
 
 ```mermaid
-flowchart LR
-    A[Receipt Image] --> B[Image Preprocessing]
-    B --> C[Vision OCR: Gemini / Groq / OpenRouter]
-    C --> D[OCR Self-Check & Guardrails]
-    
-    E[User Description] --> F[Prompt Injection Defense]
-    F --> G[NLP Parser: Groq / OpenRouter]
-    
-    D --> H[Deterministic Settlement Engine]
-    G --> H
-    
-    H --> I[Largest Remainder Method]
-    I --> J[Mermaid Money Flow & Settle-Up]
+flowchart TD
+    %% Styling Classes
+    classDef inputStyle fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc,font-weight:bold;
+    classDef visionStyle fill:#0f172a,stroke:#f59e0b,stroke-width:2px,color:#f8fafc;
+    classDef nlpStyle fill:#0f172a,stroke:#a855f7,stroke-width:2px,color:#f8fafc;
+    classDef mathStyle fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5,font-weight:bold;
+    classDef outputStyle fill:#1e1b4b,stroke:#6366f1,stroke-width:2px,color:#ffffff,font-weight:bold;
+    classDef guardStyle fill:#450a0a,stroke:#ef4444,stroke-width:1.5px,color:#fee2e2;
+
+    subgraph Inputs ["📥 1. User & Image Ingestion"]
+        IMG["🧾 Receipt Image (PNG / JPEG / WebP)"]:::inputStyle
+        TXT["💬 Group Description (Natural Language)"]:::inputStyle
+    end
+
+    subgraph VisionPipeline ["👁️ 2. Resilient Multimodal Vision OCR"]
+        IMG --> PREP["🖼️ Image Preprocessing & Base64 Guard"]:::visionStyle
+        PREP --> OCR["⚡ Tier 1: Groq Vision (qwen3.6-27b)<br/>↳ Fallback: Gemini 3.6 Flash / OpenRouter"]:::visionStyle
+        OCR --> V_CHECK{"🛡️ OCR Math Self-Check<br/>(Subtotal & Tax Cross-Validation)"}:::guardStyle
+    end
+
+    subgraph NLPPipeline ["🧠 3. Conversational Reasoning & Security"]
+        TXT --> INJ["🛡️ Prompt Injection Defense & Sanitizer"]:::guardStyle
+        INJ --> NLP["⚡ Tier 1: Groq NLP (gpt-oss-120b)<br/>↳ Fuzzy Dish Mapping, Treats & Blanket Sharing"]:::nlpStyle
+    end
+
+    subgraph CoreEngine ["⚖️ 4. Deterministic Fairness Engine"]
+        V_CHECK --> MISMATCH{"⚠️ Wrong Receipt Guard<br/>(Lexical Pre-Check < 1.5s)"}:::guardStyle
+        NLP --> MISMATCH
+        MISMATCH -->|Valid| CORR["🛠️ Error Corrections & Dynamic Overrides<br/>(Ignored Items / Tax Deductions)"]:::mathStyle
+        CORR --> LRM["🎯 Largest Remainder Method (LRM)<br/>Exact Integer Rupee Allocation (Zero-Drift)"]:::mathStyle
+    end
+
+    subgraph OutputLayer ["📊 5. Visual Output & Instant Sharing"]
+        LRM --> TBL["📋 Itemized Consumption Breakdown"]:::outputStyle
+        LRM --> S_UP["💸 Direct-to-Payer Settle-Up Vectors"]:::outputStyle
+        LRM --> MER["🌐 Mermaid Money Flow Diagram"]:::outputStyle
+        LRM --> EXP["📱 Instant WhatsApp & TSV Clipboard Export"]:::outputStyle
+    end
 ```
 
 ### 1. Multimodal OCR with Multi-Tier Fallback (`backend/extraction.py`)
