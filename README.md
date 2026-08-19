@@ -8,6 +8,39 @@
 
 **Fair-Split** is a production-grade, deterministic receipt OCR and natural language group bill settlement engine. It extracts line items from complex receipt images, parses conversational dining descriptions, handles multi-person sharing rules and restaurant math corrections, and computes mathematically exact settle-up transfers down to the single rupee.
 
+<p align="center">
+  <img src="docs/assets/demo_walkthrough.gif" alt="Fair-Split Interactive Demo Walkthrough" width="100%" style="border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);" />
+</p>
+
+---
+
+## 📸 Interface & Capabilities Showcase
+
+<div align="center">
+  <table>
+    <tr>
+      <td width="50%">
+        <h4 align="center">1. Input & Presets Dashboard</h4>
+        <img src="docs/assets/hero_showcase.png" alt="Dashboard & Presets" width="100%" />
+      </td>
+      <td width="50%">
+        <h4 align="center">2. High-Energy Scanner Animation</h4>
+        <img src="docs/assets/loading_animation.png" alt="Loading State" width="100%" />
+      </td>
+    </tr>
+    <tr>
+      <td width="50%">
+        <h4 align="center">3. Exact LRM Reconciliation Results</h4>
+        <img src="docs/assets/calculation_results.png" alt="Calculation Breakdown" width="100%" />
+      </td>
+      <td width="50%">
+        <h4 align="center">4. Visual Money Flow & Settle-Up</h4>
+        <img src="docs/assets/money_flow_chart.png" alt="Mermaid Money Flow" width="100%" />
+      </td>
+    </tr>
+  </table>
+</div>
+
 ---
 
 ## 🌟 Key Capabilities & System Architecture
